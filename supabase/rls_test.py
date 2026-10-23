@@ -1,4 +1,4 @@
-"""Supabase 규칙(RLS) 시험. 공개 키(anon)만 쓰고 비밀 키는 쓰지 않는다.
+"""Supabase 규칙(RLS) 시험. 공개 키(anon)만 쓰고 비밀 키는 쓰지 않는다. (본인 글 수정 규칙 포함)
 
 사용 순서
   1) python rls_test.py setup    시험용 계정 3개를 가입시키고, 대시보드 SQL Editor에서 실행할 SQL을 출력한다.
@@ -139,6 +139,28 @@ def run():
     r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"status": "approved"})
     T.check("본인이 제안 승인 거부", denied(r), r.text[:120])
 
+    print("== 본인 글 수정")
+    requests.patch(rest(f"profiles?user_id=eq.{oid}"), headers=hdr(ta, prefer), json={"status": "approved"})  # 다른 사람도 승인해 둔다
+    if cid:
+        r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(tu, prefer), json={"body": "수정한 댓글", "hidden": True, "place_no": "99", "author_name": "위조"})
+        row = r.json()[0] if r.status_code == 200 and r.json() else {}
+        T.check("본인 댓글 내용 수정", row.get("body") == "수정한 댓글", r.text[:160])
+        T.check("수정 시각이 기록됨", bool(row.get("updated_at")), r.text[:160])
+        T.check("숨김·가게·작성자 이름은 바꿀 수 없음", row.get("hidden") is False and row.get("place_no") == "1" and row.get("author_name") == U["user"]["name"], r.text[:200])
+        r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(to, prefer), json={"body": "남이 수정"})
+        T.check("승인된 다른 사람은 남의 댓글을 못 고침", denied(r), r.text[:120])
+        r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(), json={"body": "방문자 수정"})
+        T.check("방문자는 댓글을 못 고침", denied(r), r.text[:120])
+    if sid:
+        r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"ko": "수정한 가게", "note": "수정 메모", "photos": ["https://example.com/a.webp"], "status": "approved", "admin_note": "위조"})
+        row = r.json()[0] if r.status_code == 200 and r.json() else {}
+        T.check("본인 제안 내용·사진 수정", row.get("ko") == "수정한 가게" and row.get("photos") == ["https://example.com/a.webp"], r.text[:200])
+        T.check("제안의 상태·관리자 메모는 바꿀 수 없음", row.get("status") == "pending" and row.get("admin_note") == "", r.text[:200])
+        r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(to, prefer), json={"ko": "남이 수정"})
+        T.check("승인된 다른 사람은 남의 제안을 못 고침", denied(r), r.text[:120])
+        r = requests.delete(rest(f"suggestions?id=eq.{sid}"), headers=hdr(to, prefer))
+        T.check("승인된 다른 사람은 남의 제안을 못 지움", denied(r), r.text[:120])
+
     print("== 사진 저장소")
     sp = {"apikey": ANON, "Authorization": "Bearer " + tu}
     tiny = b"RIFF\x1a\x00\x00\x00WEBPVP8L\x0d\x00\x00\x00/\x00\x00\x00\x10\x07\x10\x11\x11\x88\x88\xfe\x07\x00"
@@ -167,6 +189,10 @@ def run():
         r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(ta, prefer), json={"status": "approved"})
         T.check("관리자가 제안 승인", r.status_code == 200 and r.json(), r.text[:120])
         T.check("승인된 제안은 방문자에게 보임", len(requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json()) == 1)
+
+    if sid:
+        r = requests.delete(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer))
+        T.check("본인은 승인된 제안도 삭제할 수 있음", r.status_code == 200 and bool(r.json()), r.text[:120])
 
     print("== 관리자 인수인계")
     r = requests.post(f"{URL}/rest/v1/rpc/revoke_admin", headers=hdr(ta), json={"target": U["admin"]["id"]})
