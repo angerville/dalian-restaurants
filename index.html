@@ -26,6 +26,8 @@ header.top h1{font-size:18px;margin:0 6px 0 0}
 .filters{padding:8px 16px;border-bottom:1px solid var(--line);display:grid;gap:6px;background:var(--bg)}
 .fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .fr .lab{font-size:12px;color:var(--sub);width:34px}
+.fr{scrollbar-width:none}
+.fr::-webkit-scrollbar{display:none}
 .chip{padding:3px 10px;font-size:13px;border-radius:999px}
 .chip .n{color:var(--sub);margin-left:3px;font-size:12px}
 .chip.on .n{color:#fff}
@@ -71,6 +73,8 @@ form.dlg h2{font-size:17px;margin:0}
 #sheetbody .card{border:0}
 #sheetbody .gal img{aspect-ratio:16/10}
 @media(min-width:821px){#sheet{display:none!important}}
+.lbl{display:none;position:absolute;left:20px;top:-1px;white-space:nowrap;font-size:12px;font-weight:600;color:#111827;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;pointer-events:none}
+.show-labels .lbl{display:block}
 .locbtn{background:#fff;border:2px solid rgba(0,0,0,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
 .locbtn.on{background:#2563eb;color:#fff;border-color:#2563eb}
 .pin{background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
@@ -255,13 +259,20 @@ function render() {
   if (sheetId) drawSheet();
   sizeLayout();
 }
+const LABEL_ZOOM = 14;   // 이 확대 단계부터 이름(종류)을 지도 위에 보인다
+function markerLabel(p) {   // 가게가 직접 쓴 종류의 첫 항목(괄호 앞)을 쓰고, 없으면 분류 태그를 쓴다
+  let t = (p.kind || "").split(",")[0].split("(")[0].trim();
+  if (!t) { const g = (p.tags || [])[0]; t = g && g !== "기타" && g !== "새 제안" ? g : ""; }
+  return t ? `${p.ko}(${t})` : p.ko;
+}
+function updateLabels() { if (map) map.getContainer().classList.toggle("show-labels", map.getZoom() >= LABEL_ZOOM); }
 function drawMarkers(shown) {
   if (!map) return;
   Object.values(markers).forEach(m => m.remove()); markers = {};
   const pts = [];
   shown.forEach(p => {
     if (!p.glat) return;
-    const m = L.marker([p.glat, p.glon], { icon: L.divIcon({ className: "", html: '<div class="pin" style="width:16px;height:16px"></div>', iconSize: [16, 16] }) }).addTo(map);
+    const m = L.marker([p.glat, p.glon], { icon: L.divIcon({ className: "", html: `<div class="pin" style="width:16px;height:16px"></div><span class="lbl">${esc(markerLabel(p))}</span>`, iconSize: [16, 16] }) }).addTo(map);
     m.bindTooltip(p.ko);
     m.on("click", () => { if (innerWidth <= 820) return openSheet(p); const el = $("p" + p.id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } });
     markers[p.id] = m; pts.push([p.glat, p.glon]);
@@ -324,6 +335,7 @@ function toggleMe() {
 function initMap() {
   map = L.map("map", { zoomControl: true }).setView([38.93, 121.62], 11);
   map.on("click", () => closeSheet());
+  map.on("zoomend", updateLabels); updateLabels();
   const Loc = L.Control.extend({ options: { position: "topright" }, onAdd() { const b = L.DomUtil.create("button", "locbtn"); b.textContent = "내 위치"; b.type = "button"; L.DomEvent.disableClickPropagation(b); b.addEventListener("click", toggleMe); return b; } });
   new Loc().addTo(map);
   L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", { subdomains: "1234", maxZoom: 18, minZoom: 8, attribution: "© 高德地图" }).addTo(map);
