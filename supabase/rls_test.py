@@ -1,4 +1,4 @@
-"""Supabase 규칙(RLS) 시험. 공개 키(anon)만 쓰고 비밀 키는 쓰지 않는다. (본인 글 수정 규칙 포함)
+"""Supabase 규칙(RLS) 시험. 공개 키(anon)만 쓰고 비밀 키는 쓰지 않는다.
 
 사용 순서
   1) python rls_test.py setup    시험용 계정 3개를 가입시키고, 대시보드 SQL Editor에서 실행할 SQL을 출력한다.
@@ -137,7 +137,8 @@ def run():
     T.check("대기 중 제안은 방문자에게 안 보임", requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json() == [])
     T.check("대기 중 제안은 본인에게 보임", len(requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr(tu)).json()) == 1)
     r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"status": "approved"})
-    T.check("본인이 제안 승인 거부", denied(r), r.text[:120])
+    row = r.json()[0] if r.status_code == 200 and r.json() else {}
+    T.check("본인이 제안 상태를 승인으로 바꿀 수 없음", denied(r) or row.get("status") == "pending", r.text[:120])
 
     print("== 본인 글 수정")
     requests.patch(rest(f"profiles?user_id=eq.{oid}"), headers=hdr(ta, prefer), json={"status": "approved"})  # 다른 사람도 승인해 둔다
@@ -149,8 +150,9 @@ def run():
         T.check("숨김·가게·작성자 이름은 바꿀 수 없음", row.get("hidden") is False and row.get("place_no") == "1" and row.get("author_name") == U["user"]["name"], r.text[:200])
         r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(to, prefer), json={"body": "남이 수정"})
         T.check("승인된 다른 사람은 남의 댓글을 못 고침", denied(r), r.text[:120])
-        r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(), json={"body": "방문자 수정"})
-        T.check("방문자는 댓글을 못 고침", denied(r), r.text[:120])
+        r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(extra=prefer), json={"body": "방문자 수정"})
+        now = requests.get(rest(f"comments?id=eq.{cid}&select=body"), headers=hdr()).json()
+        T.check("방문자는 댓글을 못 고침", denied(r) and now and now[0]["body"] == "수정한 댓글", r.text[:120])
     if sid:
         r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"ko": "수정한 가게", "note": "수정 메모", "photos": ["https://example.com/a.webp"], "status": "approved", "admin_note": "위조"})
         row = r.json()[0] if r.status_code == 200 and r.json() else {}
@@ -181,7 +183,8 @@ def run():
         r = requests.delete(rest(f"comments?id=eq.{cid}"), headers=hdr(to, prefer))
         T.check("남의 댓글 삭제 거부", denied(r), r.text[:120])
         r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(tu, prefer), json={"hidden": True})
-        T.check("본인이 댓글 숨기기 거부", denied(r), r.text[:120])
+        row = r.json()[0] if r.status_code == 200 and r.json() else {}
+        T.check("본인이 댓글을 숨길 수 없음", denied(r) or row.get("hidden") is False, r.text[:120])
         r = requests.patch(rest(f"comments?id=eq.{cid}"), headers=hdr(ta, prefer), json={"hidden": True})
         T.check("관리자가 댓글 숨기기", r.status_code == 200 and r.json(), r.text[:120])
         T.check("숨긴 댓글은 방문자에게 안 보임", requests.get(rest(f"comments?id=eq.{cid}&select=id"), headers=hdr()).json() == [])
@@ -195,14 +198,18 @@ def run():
         T.check("본인은 승인된 제안도 삭제할 수 있음", r.status_code == 200 and bool(r.json()), r.text[:120])
 
     print("== 관리자 인수인계")
-    r = requests.post(f"{URL}/rest/v1/rpc/revoke_admin", headers=hdr(ta), json={"target": U["admin"]["id"]})
-    T.check("마지막 관리자 해제 거부", r.status_code >= 400, r.text[:120])
+    ids = {x["user_id"] for x in requests.get(rest("admins?select=user_id"), headers=hdr(ta)).json()}
+    real = ids - {U["admin"]["id"], uid, oid}      # 시험 계정이 아닌 실제 관리자
     r = requests.post(f"{URL}/rest/v1/rpc/grant_admin", headers=hdr(ta), json={"target": uid})
     T.check("다음 관리자 지정", r.status_code in (200, 204), r.text[:120])
     r = requests.post(f"{URL}/rest/v1/rpc/revoke_admin", headers=hdr(ta), json={"target": U["admin"]["id"]})
     T.check("지정 후에는 이전 관리자 해제 가능", r.status_code in (200, 204), r.text[:120])
     r = requests.post(f"{URL}/rest/v1/rpc/revoke_admin", headers=hdr(tu), json={"target": uid})
-    T.check("남은 마지막 관리자는 해제 거부", r.status_code >= 400, r.text[:120])
+    if real:
+        print("건너뜀  마지막 관리자 해제 거부 (실제 관리자가 따로 있어 이 시험은 할 수 없음. 시험 계정만 있던 첫 시험에서 통과 확인됨)")
+        T.check("시험 관리자 해제(실제 관리자가 있으므로 허용)", r.status_code in (200, 204), r.text[:120])
+    else:
+        T.check("남은 마지막 관리자는 해제 거부", r.status_code >= 400, r.text[:120])
 
     print(f"\n통과 {T.ok} / 실패 {T.bad}")
     sys.exit(1 if T.bad else 0)
