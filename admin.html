@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>대련 맛집 관리</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+:root{--bg:#fff;--soft:#f3f4f6;--line:#e5e7eb;--text:#111827;--sub:#6b7280;--accent:#e8590c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Pretendard,"Malgun Gothic",sans-serif;word-break:keep-all;line-height:1.5}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;margin:0 8px 0 0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+button{font:inherit;white-space:nowrap;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.spacer{flex:1}
+.sub{color:var(--sub);font-size:13px}
+main{max-width:900px;margin:0 auto;padding:16px 20px 80px;display:grid;gap:12px}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.name{font-weight:600}
+.badge{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:0 8px;color:var(--sub)}
+.badge.ok{color:var(--accent);border-color:var(--accent)}
+input[type=text],input[type=email],input[type=password],textarea{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
+input:focus,textarea:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+label{display:grid;gap:2px;font-size:12px;color:var(--sub)}
+.login{max-width:380px;margin:60px auto;display:grid;gap:10px;padding:0 20px}
+.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.photos img{width:88px;height:88px;object-fit:cover;border-radius:8px}
+.body{white-space:pre-wrap}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
+const app = document.getElementById("app");
+let me = null, tab = "pending", isAdmin = false, myStatus = "";
+const TABS = [["pending", "가입 승인"], ["members", "구성원"], ["suggest", "새 가게 제안"], ["comments", "댓글"], ["admins", "관리자"]];
+
+function esc(v) { return String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+function toast(t) { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); }
+const fmt = d => new Date(d).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+async function run(p, ok) { const { error } = await p; if (error) { toast("실패: " + error.message); return false; } if (ok) toast(ok); return true; }
+
+// ---- 로그인 ----
+function loginView(msg = "") {
+  app.innerHTML = `<form class="login" id="lf">
+    <h1>대련 맛집 관리</h1>
+    <label>이메일<input type="email" name="email" required autocomplete="username"></label>
+    <label>비밀번호(6자 이상)<input type="password" name="pw" minlength="6" required autocomplete="current-password"></label>
+    <label>이름(가입할 때만)<input type="text" name="name" autocomplete="name"></label>
+    <div class="row"><button class="on" type="submit" data-m="in">로그인</button><button type="submit" data-m="up">가입</button></div>
+    <div class="sub">${esc(msg)}</div></form>`;
+  const f = document.getElementById("lf");
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const mode = e.submitter?.dataset.m, email = f.email.value.trim(), password = f.pw.value;
+    if (mode === "up") {
+      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name: f.name.value.trim() } } });
+      if (error) return toast("가입 실패: " + error.message);
+      if (!data.session) return loginView("가입 완료. 메일 인증이 필요한 설정이면 메일함을 확인하세요.");
+      toast("가입 완료");
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) return toast("로그인 실패: " + error.message);
+    }
+    start();
+  });
+}
+async function start() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return loginView();
+  me = data.session.user;
+  const [a, p] = await Promise.all([sb.rpc("is_admin"), sb.from("profiles").select("status,display_name").eq("user_id", me.id).maybeSingle()]);
+  isAdmin = a.data === true; myStatus = p.data?.status || "";
+  if (!isAdmin) {
+    app.innerHTML = `<div class="login"><h1>대련 맛집 관리</h1><div>관리자 권한이 없는 계정입니다.</div>
+      <div class="sub">${esc(me.email)} · 상태: ${esc({ pending: "승인 대기", approved: "승인됨", blocked: "차단됨" }[myStatus] || "알 수 없음")}</div>
+      <div class="row"><button id="lo">로그아웃</button></div></div>`;
+    return document.getElementById("lo").addEventListener("click", async () => { await sb.auth.signOut(); loginView(); });
+  }
+  shell(); show();
+}
+function shell() {
+  app.innerHTML = `<header><h1>대련 맛집 관리</h1><div class="tabs" id="tabs"></div><span class="spacer"></span>
+    <span class="sub">${esc(me.email)}</span><button id="backup">백업 내보내기</button><button id="lo">로그아웃</button></header><main id="main"></main>`;
+  document.getElementById("tabs").addEventListener("click", e => { const b = e.target.closest("[data-t]"); if (b) { tab = b.dataset.t; show(); } });
+  document.getElementById("lo").addEventListener("click", async () => { await sb.auth.signOut(); loginView(); });
+  document.getElementById("backup").addEventListener("click", backup);
+}
+async function show() {
+  document.getElementById("tabs").innerHTML = TABS.map(([k, n]) => `<button data-t="${k}" class="${tab === k ? "on" : ""}">${n}</button>`).join("");
+  const main = document.getElementById("main");
+  main.innerHTML = `<div class="sub">불러오는 중</div>`;
+  ({ pending: viewPending, members: viewMembers, suggest: viewSuggest, comments: viewComments, admins: viewAdmins })[tab](main);
+}
+
+// ---- 가입 승인 ----
+async function viewPending(main) {
+  const { data, error } = await sb.from("profiles").select("*").eq("status", "pending").order("created_at");
+  if (error) return main.innerHTML = `<div class="card">${esc(error.message)}</div>`;
+  main.innerHTML = data.length ? data.map(u => `<div class="card"><span class="name">${esc(u.display_name || "(이름 없음)")}</span> <span class="sub">${esc(u.email)} · ${fmt(u.created_at)}</span>
+    <div class="row"><button class="on" data-ok="${u.user_id}">승인</button><button data-block="${u.user_id}">차단</button></div></div>`).join("") : `<div class="card sub">승인 대기 중인 사람이 없습니다</div>`;
+  main.querySelectorAll("[data-ok]").forEach(b => b.addEventListener("click", async () => { if (await run(sb.from("profiles").update({ status: "approved" }).eq("user_id", b.dataset.ok), "승인함")) show(); }));
+  main.querySelectorAll("[data-block]").forEach(b => b.addEventListener("click", async () => { if (await run(sb.from("profiles").update({ status: "blocked" }).eq("user_id", b.dataset.block), "차단함")) show(); }));
+}
+
+// ---- 구성원 ----
+async function viewMembers(main) {
+  const [u, a] = await Promise.all([sb.from("profiles").select("*").neq("status", "pending").order("created_at"), sb.from("admins").select("user_id")]);
+  if (u.error) return main.innerHTML = `<div class="card">${esc(u.error.message)}</div>`;
+  const adm = new Set((a.data || []).map(x => x.user_id));
+  main.innerHTML = u.data.length ? u.data.map(x => `<div class="card"><span class="name">${esc(x.display_name || "(이름 없음)")}</span>
+    <span class="badge ${x.status === "approved" ? "ok" : ""}">${x.status === "approved" ? "승인됨" : "차단됨"}</span>${adm.has(x.user_id) ? ' <span class="badge ok">관리자</span>' : ""}
+    <span class="sub"> ${esc(x.email)} · ${fmt(x.created_at)}</span>
+    <div class="row">${x.status === "approved" ? `<button data-block="${x.user_id}">차단</button>` : `<button data-ok="${x.user_id}">승인</button>`}
+    ${x.status === "approved" && !adm.has(x.user_id) ? `<button data-admin="${x.user_id}">관리자로 지정</button>` : ""}</div></div>`).join("") : `<div class="card sub">구성원이 없습니다</div>`;
+  main.querySelectorAll("[data-block]").forEach(b => b.addEventListener("click", async () => { if (await run(sb.from("profiles").update({ status: "blocked" }).eq("user_id", b.dataset.block), "차단함")) show(); }));
+  main.querySelectorAll("[data-ok]").forEach(b => b.addEventListener("click", async () => { if (await run(sb.from("profiles").update({ status: "approved" }).eq("user_id", b.dataset.ok), "승인함")) show(); }));
+  main.querySelectorAll("[data-admin]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "지정 확인"; return; }
+    if (await run(sb.rpc("grant_admin", { target: b.dataset.admin }), "관리자로 지정함")) show();
+  }));
+}
+
+// ---- 새 가게 제안 ----
+async function viewSuggest(main) {
+  const { data, error } = await sb.from("suggestions").select("*").eq("status", "pending").order("created_at");
+  if (error) return main.innerHTML = `<div class="card">${esc(error.message)}</div>`;
+  main.innerHTML = data.length ? data.map(s => `<div class="card" data-id="${s.id}">
+    <div><span class="name">${esc(s.ko)}</span> <span class="sub">${esc(s.author_name || "")} · ${fmt(s.created_at)}</span></div>
+    <div class="photos">${(s.photos || []).map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join("")}</div>
+    <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <label>한글 이름<input type="text" data-f="ko" value="${esc(s.ko)}"></label><label>Amap 이름<input type="text" data-f="zh" value="${esc(s.zh)}"></label>
+      <label>인당 가격<input type="text" data-f="price" value="${esc(s.price)}"></label><label>음식 종류<input type="text" data-f="kind" value="${esc(s.kind)}"></label>
+      <label>위도<input type="text" data-f="lat" value="${esc(s.lat ?? "")}"></label><label>경도<input type="text" data-f="lon" value="${esc(s.lon ?? "")}"></label>
+      <label style="grid-column:span 2">추천 메뉴<input type="text" data-f="menu" value="${esc(s.menu)}"></label>
+      <label style="grid-column:span 2">메모<textarea rows="2" data-f="note">${esc(s.note)}</textarea></label>
+      <label style="grid-column:span 2">관리자 메모(거절 사유 등)<input type="text" data-f="admin_note" value="${esc(s.admin_note)}"></label></div>
+    <div class="row"><button class="on" data-act="approved">승인</button><button data-act="rejected">거절</button></div></div>`).join("") : `<div class="card sub">대기 중인 제안이 없습니다</div>`;
+  main.querySelectorAll(".card[data-id]").forEach(card => card.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", async () => {
+    const v = {}; card.querySelectorAll("[data-f]").forEach(i => v[i.dataset.f] = i.value.trim());
+    v.lat = v.lat === "" ? null : Number(v.lat); v.lon = v.lon === "" ? null : Number(v.lon);
+    if ((v.lat !== null && !isFinite(v.lat)) || (v.lon !== null && !isFinite(v.lon))) return toast("위도·경도는 숫자로");
+    v.status = b.dataset.act;
+    if (await run(sb.from("suggestions").update(v).eq("id", card.dataset.id), v.status === "approved" ? "승인함" : "거절함")) show();
+  })));
+}
+
+// ---- 댓글 ----
+async function viewComments(main) {
+  const { data, error } = await sb.from("comments").select("*").order("created_at", { ascending: false }).limit(100);
+  if (error) return main.innerHTML = `<div class="card">${esc(error.message)}</div>`;
+  main.innerHTML = data.length ? data.map(c => `<div class="card"><span class="name">${esc(c.author_name || "(이름 없음)")}</span>
+    <span class="sub"> 가게 ${esc(c.place_no)} · ${fmt(c.created_at)}</span>${c.hidden ? ' <span class="badge">숨김</span>' : ""}
+    <div class="body">${esc(c.body)}</div>
+    <div class="row"><button data-hide="${c.id}" data-to="${!c.hidden}">${c.hidden ? "보이기" : "숨기기"}</button><button data-del="${c.id}">삭제</button></div></div>`).join("") : `<div class="card sub">댓글이 없습니다</div>`;
+  main.querySelectorAll("[data-hide]").forEach(b => b.addEventListener("click", async () => { if (await run(sb.from("comments").update({ hidden: b.dataset.to === "true" }).eq("id", b.dataset.hide))) show(); }));
+  main.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "삭제 확인"; return; }
+    if (await run(sb.from("comments").delete().eq("id", b.dataset.del), "삭제함")) show();
+  }));
+}
+
+// ---- 관리자 ----
+async function viewAdmins(main) {
+  const [a, u] = await Promise.all([sb.from("admins").select("user_id,created_at"), sb.from("profiles").select("user_id,email,display_name")]);
+  if (a.error) return main.innerHTML = `<div class="card">${esc(a.error.message)}</div>`;
+  const by = Object.fromEntries((u.data || []).map(x => [x.user_id, x]));
+  main.innerHTML = `<div class="card sub">관리자를 넘겨줄 때: 구성원 탭에서 다음 사람을 "관리자로 지정"한 뒤, 이전 관리자가 아래에서 자신을 해제합니다. 마지막 관리자는 해제되지 않습니다.</div>` +
+    a.data.map(x => `<div class="card"><span class="name">${esc(by[x.user_id]?.display_name || "(이름 없음)")}</span> <span class="sub">${esc(by[x.user_id]?.email || x.user_id)} · ${fmt(x.created_at)}${x.user_id === me.id ? " · 나" : ""}</span>
+    <div class="row"><button data-rev="${x.user_id}">관리자 해제</button></div></div>`).join("");
+  main.querySelectorAll("[data-rev]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "해제 확인"; return; }
+    if (await run(sb.rpc("revoke_admin", { target: b.dataset.rev }), "해제함")) { if (b.dataset.rev === me.id) start(); else show(); }
+  }));
+}
+
+// ---- 백업 ----
+async function backup() {
+  const [p, c, s, a] = await Promise.all([sb.from("profiles").select("*"), sb.from("comments").select("*"), sb.from("suggestions").select("*"), sb.from("admins").select("*")]);
+  const err = [p, c, s, a].find(x => x.error); if (err) return toast("백업 실패: " + err.error.message);
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), profiles: p.data, admins: a.data, comments: c.data, suggestions: s.data }, null, 1)], { type: "application/json" });
+  const el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = `backup_${new Date().toISOString().slice(0, 10)}.json`; el.click();
+  toast("백업 파일 내보냄");
+}
+start();
+</script>
+</body>
+</html>

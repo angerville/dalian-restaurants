@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>대련 맛집 지도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+:root{--bg:#fff;--soft:#f3f4f6;--line:#e5e7eb;--text:#111827;--sub:#6b7280;--accent:#e8590c}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Pretendard,"Malgun Gothic",sans-serif;word-break:keep-all;line-height:1.5}
+button{font:inherit;white-space:nowrap;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=email],input[type=password],textarea{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
+input:focus,textarea:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+label{display:grid;gap:2px;font-size:12px;color:var(--sub)}
+header.top{position:sticky;top:0;z-index:1100;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header.top h1{font-size:18px;margin:0 6px 0 0}
+#q{flex:1;min-width:160px;max-width:320px}
+.spacer{flex:1}
+.who{font-size:13px;color:var(--sub)}
+.filters{padding:8px 16px;border-bottom:1px solid var(--line);display:grid;gap:6px;background:var(--bg)}
+.fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fr .lab{font-size:12px;color:var(--sub);width:34px}
+.chip{padding:3px 10px;font-size:13px;border-radius:999px}
+.chip .n{color:var(--sub);margin-left:3px;font-size:12px}
+.chip.on .n{color:#fff}
+.layout{display:grid;grid-template-columns:minmax(360px,520px) 1fr;height:calc(100vh - var(--hh,150px))}
+#list{overflow:auto;padding:12px 16px;display:grid;gap:14px;align-content:start;grid-auto-rows:max-content}
+#map{height:100%;min-height:300px}
+.mtabs{display:none}
+.card{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.card.hl{outline:2px solid var(--accent)}
+.gal{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;background:var(--soft)}
+.gal img{width:100%;flex:none;aspect-ratio:4/3;object-fit:cover;scroll-snap-align:center;cursor:pointer}
+.gal.one img{aspect-ratio:4/3}
+.body{padding:12px 14px}
+.nm{font-size:17px;font-weight:700}
+.zh{font-size:13px;color:var(--sub)}
+.meta{font-size:13px;color:var(--sub);margin-top:2px}
+.menu{margin-top:8px;font-size:14px}
+.menu b{font-weight:600}
+.note{margin-top:6px;font-size:14px;white-space:pre-wrap}
+.acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.cm{border-top:1px solid var(--line);margin-top:10px;padding-top:10px;display:grid;gap:8px}
+.c{font-size:14px;border-bottom:1px solid var(--soft);padding-bottom:6px}
+.c .by{font-size:12px;color:var(--sub)}
+.c .by button{border:0;padding:0 4px;font-size:12px;color:var(--sub);background:none}
+.tag{font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px;margin-left:6px}
+.empty{padding:40px 16px;color:var(--sub);text-align:center}
+dialog{border:0;border-radius:12px;padding:0;max-width:94vw}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog.pic img{display:block;max-width:94vw;max-height:88vh}
+form.dlg{display:grid;gap:10px;padding:20px;width:min(520px,92vw);max-height:90vh;overflow:auto}
+form.dlg h2{font-size:17px;margin:0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+.prev{display:flex;gap:6px;flex-wrap:wrap}
+.prev img{width:60px;height:60px;object-fit:cover;border-radius:8px}
+.msg{min-height:20px;font-size:13px;color:var(--accent)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:2000}
+#toast.show{opacity:1}
+.locbtn{background:#fff;border:2px solid rgba(0,0,0,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
+.locbtn.on{background:#2563eb;color:#fff;border-color:#2563eb}
+.pin{background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+@media(max-width:820px){
+  .layout{grid-template-columns:1fr;height:auto}
+  #map{height:calc(100vh - var(--hh,200px));display:none}
+  .layout.showmap #map{display:block}
+  .layout.showmap #list{display:none}
+  .mtabs{display:flex;gap:6px;padding:8px 16px;border-bottom:1px solid var(--line)}
+  .fr{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+  .fr .chip,.fr .lab{flex:none}
+  .filters{padding:6px 16px;gap:4px}
+}
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <h1>대련 맛집 지도</h1>
+  <input type="text" id="q" placeholder="이름·메뉴 검색">
+  <span class="spacer"></span>
+  <button id="suggest">새 가게 추천</button>
+  <span class="who" id="who"></span>
+  <button id="login">로그인</button>
+</header>
+<div class="filters" id="filters"></div>
+<div class="mtabs" id="mtabs"><button class="on" data-v="list">목록</button><button data-v="map">지도</button></div>
+<div class="layout" id="layout"><div id="list"></div><div id="map"></div></div>
+
+<dialog id="pic" class="pic"><img id="picimg" alt=""></dialog>
+
+<dialog id="logdlg"><form class="dlg" id="logform">
+  <h2>로그인</h2>
+  <label>이메일<input type="email" name="email" required autocomplete="username"></label>
+  <label>비밀번호(6자 이상)<input type="password" name="pw" minlength="6" required autocomplete="current-password"></label>
+  <label>이름(가입할 때만)<input type="text" name="name" autocomplete="name"></label>
+  <div class="msg" id="logmsg"></div>
+  <div class="actions"><button type="button" id="logcancel">취소</button><button type="submit" class="on" data-m="in" style="order:3">로그인</button><button type="submit" data-m="up" style="order:2">가입</button></div>
+</form></dialog>
+
+<dialog id="sugdlg"><form class="dlg" id="sugform">
+  <h2>새 가게 추천</h2>
+  <div class="g2"><label>한글 이름<input type="text" name="ko" required maxlength="100"></label><label>Amap 이름<input type="text" name="zh" maxlength="200"></label></div>
+  <div class="g2"><label>위도<input type="text" name="lat" inputmode="decimal"></label><label>경도<input type="text" name="lon" inputmode="decimal"></label></div>
+  <div class="actions" style="justify-content:flex-start"><button type="button" id="geo">현재 위치</button></div>
+  <div class="g2"><label>인당 가격(위안)<input type="text" name="price" maxlength="40"></label><label>음식 종류<input type="text" name="kind" maxlength="60"></label></div>
+  <label>추천 메뉴<input type="text" name="menu" maxlength="300"></label>
+  <label>메모<textarea name="note" rows="3" maxlength="1500"></textarea></label>
+  <label>사진(최대 10장)<input type="file" name="photos" accept="image/*" multiple></label>
+  <div class="prev" id="prev"></div>
+  <div class="msg" id="sugmsg"></div>
+  <div class="actions"><button type="button" id="sugcancel">취소</button><button type="submit" class="on" id="sugsend">제출</button></div>
+</form></dialog>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
+<script src="config.js"></script>
+<script>
+const sb = (window.supabase && APP_CONFIG.SUPABASE_URL) ? supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY) : null;
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+const say = t => { const m = document.querySelector("dialog[open] .msg"); if (m) m.textContent = t; toast(t); };
+const toast = t => { const el = $("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); };
+const PRICE_BANDS = [["~60", 0, 60], ["60~100", 60, 100], ["100~150", 100, 150], ["150~", 150, 1e9]];
+
+let PLACES = [], COMMENTS = {}, map, markers = {}, user = null, status = "";
+const F = { q: "", tag: new Set(), region: new Set(), price: new Set(), near: false };
+const openComments = new Set();
+
+// ---------- 데이터 ----------
+async function load() {
+  PLACES = await (await fetch("data/restaurants.json")).json();
+  render();
+  if (!sb) return;
+  try {
+    const [s, c] = await Promise.all([
+      sb.from("suggestions").select("*").eq("status", "approved").order("created_at"),
+      sb.from("comments").select("*").eq("hidden", false).order("created_at"),
+    ]);
+    if (s.data) PLACES = PLACES.concat(s.data.map(toPlace));
+    COMMENTS = {};
+    (c.data || []).forEach(x => (COMMENTS[x.place_no] ||= []).push(x));
+    if (s.error || c.error) toast("댓글을 불러오지 못했습니다");
+  } catch (e) { toast("댓글을 불러오지 못했습니다"); }
+  render();
+}
+function toPlace(s) {
+  const m = (s.price || "").match(/\d+/), tags = [];
+  return { id: "s" + s.id, ko: s.ko, zh: s.zh, kind: s.kind, tags: tags.length ? tags : ["새 제안"], price: s.price, priceMin: m ? +m[0] : null, region: "",
+    lat: s.lat, lon: s.lon, glat: s.lat ? gcj(+s.lat, +s.lon)[0] : null, glon: s.lat ? gcj(+s.lat, +s.lon)[1] : null,
+    menu: s.menu, note: s.note, photos: s.photos || [], nFood: (s.photos || []).length, url: true, by: s.author_name };
+}
+function gcj(lat, lon) {
+  const a = 6378245.0, ee = 0.00669342162296594323;
+  const tl = (x, y) => -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x)) + (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI) + 20*Math.sin(y*Math.PI) + 40*Math.sin(y/3*Math.PI) + 160*Math.sin(y/12*Math.PI) + 320*Math.sin(y*Math.PI/30)) * 2/3;
+  const tn = (x, y) => 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x)) + (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI) + 20*Math.sin(x*Math.PI) + 40*Math.sin(x/3*Math.PI) + 150*Math.sin(x/12*Math.PI) + 300*Math.sin(x/30*Math.PI)) * 2/3;
+  let dl = tl(lon - 105, lat - 35), dn = tn(lon - 105, lat - 35);
+  const rl = lat / 180 * Math.PI, m = 1 - ee * Math.sin(rl) ** 2, sm = Math.sqrt(m);
+  dl = dl * 180 / ((a * (1 - ee)) / (m * sm) * Math.PI); dn = dn * 180 / (a / sm * Math.cos(rl) * Math.PI);
+  return [lat + dl, lon + dn];
+}
+const photoUrl = (p, x) => x.url ? p : "photos/" + p;
+
+// ---------- 필터 ----------
+function matches(p) {
+  if (F.q) { const h = (p.ko + p.zh + p.kind + p.menu + p.note).toLowerCase(); if (!F.q.split(/\s+/).every(w => h.includes(w))) return false; }
+  if (F.tag.size && !p.tags.some(t => F.tag.has(t))) return false;
+  if (F.region.size && !F.region.has(p.region)) return false;
+  if (F.price.size && !(p.priceMin != null && [...F.price].some(i => p.priceMin >= PRICE_BANDS[i][1] && p.priceMin < PRICE_BANDS[i][2]))) return false;
+  return true;
+}
+function renderFilters() {
+  const count = (fn) => PLACES.filter(fn).length;
+  const tags = [...new Set(PLACES.flatMap(p => p.tags))], regions = [...new Set(PLACES.map(p => p.region).filter(Boolean))];
+  const chip = (g, v, label, n) => `<button class="chip ${F[g].has(v) ? "on" : ""}" data-g="${g}" data-v="${esc(v)}">${esc(label)}<span class="n">${n}</span></button>`;
+  $("filters").innerHTML =
+    `<div class="fr"><span class="lab">종류</span>${tags.sort().map(t => chip("tag", t, t, count(p => p.tags.includes(t)))).join("")}</div>` +
+    `<div class="fr"><span class="lab">지역</span>${regions.map(r => chip("region", r, r, count(p => p.region === r))).join("")}</div>` +
+    `<div class="fr"><span class="lab">가격</span>${PRICE_BANDS.map((b, i) => chip("price", i, "¥" + b[0], count(p => p.priceMin != null && p.priceMin >= b[1] && p.priceMin < b[2]))).join("")}` +
+    `${myPos ? `<button class="chip ${F.near ? "on" : ""}" data-near>가까운 순</button>` : ""}${(F.q || F.tag.size || F.region.size || F.price.size) ? `<button class="chip" data-reset>초기화</button>` : ""}</div>`;
+}
+$("filters").addEventListener("click", e => {
+  if (e.target.closest("[data-near]")) { F.near = !F.near; return render(); }
+  if (e.target.closest("[data-reset]")) { F.q = ""; $("q").value = ""; F.tag.clear(); F.region.clear(); F.price.clear(); return render(); }
+  const b = e.target.closest("[data-g]"); if (!b) return;
+  const v = b.dataset.g === "price" ? +b.dataset.v : b.dataset.v, s = F[b.dataset.g];
+  s.has(v) ? s.delete(v) : s.add(v); render();
+});
+$("q").addEventListener("input", e => { F.q = e.target.value.trim().toLowerCase(); render(); });
+
+// ---------- 목록·지도 ----------
+function card(p) {
+  const el = document.createElement("section");
+  el.className = "card"; el.id = "p" + p.id;
+  const cs = COMMENTS[p.id] || [], open = openComments.has(p.id);
+  const amap = p.glat ? `https://uri.amap.com/marker?position=${(+p.glon).toFixed(6)},${(+p.glat).toFixed(6)}&name=${encodeURIComponent(p.zh || p.ko)}` : "";
+  el.innerHTML = `
+    ${p.photos.length ? `<div class="gal ${p.photos.length === 1 ? "one" : ""}">${p.photos.map((f, i) => `<img src="${esc(photoUrl(f, p))}" ${i ? 'loading="lazy"' : ""} alt="${esc(p.ko)}" data-big>`).join("")}</div>` : ""}
+    <div class="body">
+      <div><span class="nm">${esc(p.ko)}</span>${p.url ? '<span class="tag">추천</span>' : ""}</div>
+      ${p.zh ? `<div class="zh">${esc(p.zh)}</div>` : ""}
+      <div class="meta">${[p.kind, p.price ? "인당 ¥" + p.price : "", p.region, (myPos && p.glat) ? "내 위치에서 " + fmtDist(distM(myPos, [p.glat, p.glon])) : ""].filter(Boolean).map(esc).join(" · ")}</div>
+      ${p.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(p.menu)}</div>` : ""}
+      ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
+      ${p.by ? `<div class="meta">추천 ${esc(p.by)}</div>` : ""}
+      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button></div>
+      ${open ? `<div class="cm">${cs.map(c => `<div class="c"><div>${esc(c.body)}</div><div class="by">${esc(c.author_name || "")} · ${new Date(c.created_at).toLocaleDateString("ko-KR")}${user && c.user_id === user.id ? ` <button data-delc="${c.id}">삭제</button>` : ""}</div></div>`).join("") || '<div class="by" style="color:var(--sub)">아직 댓글이 없습니다</div>'}
+        ${status === "approved" ? `<form data-cf style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" placeholder="댓글" required></textarea><div class="actions"><button type="submit" class="on">등록</button></div></form>`
+          : `<div class="by" style="color:var(--sub)">${user ? (status === "pending" ? "관리자 승인 후 댓글을 쓸 수 있습니다" : "댓글을 쓸 수 없는 계정입니다") : "로그인하면 승인된 선생님은 댓글을 쓸 수 있습니다"}</div>`}</div>` : ""}
+    </div>`;
+  el.querySelectorAll("[data-big]").forEach(im => im.addEventListener("click", () => { $("picimg").src = im.src; $("pic").showModal(); }));
+  el.querySelector("[data-cm]").addEventListener("click", () => { openComments.has(p.id) ? openComments.delete(p.id) : openComments.add(p.id); render(); });
+  el.querySelector("[data-pin]").addEventListener("click", () => focusMap(p));
+  el.querySelectorAll("[data-delc]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "삭제 확인"; return; }
+    const { error } = await sb.from("comments").delete().eq("id", b.dataset.delc);
+    if (error) return toast("삭제하지 못했습니다"); load();
+  }));
+  const cf = el.querySelector("[data-cf]");
+  if (cf) cf.addEventListener("submit", async e => {
+    e.preventDefault(); const ta = cf.querySelector("textarea"), btn = cf.querySelector("button");
+    btn.disabled = true;
+    const { error } = await sb.from("comments").insert({ place_no: p.id, body: ta.value.trim() });
+    btn.disabled = false;
+    if (error) return toast("등록하지 못했습니다: " + error.message);
+    ta.value = ""; load();
+  });
+  return el;
+}
+function render() {
+  renderFilters();
+  let shown = PLACES.filter(matches);
+  if (F.near && myPos) shown = shown.slice().sort((a, b) => (a.glat ? distM(myPos, [a.glat, a.glon]) : 1e9) - (b.glat ? distM(myPos, [b.glat, b.glon]) : 1e9));
+  const list = $("list"), keep = list.scrollTop;
+  list.innerHTML = "";
+  if (!shown.length) list.innerHTML = '<div class="empty">조건에 맞는 가게가 없습니다</div>';
+  shown.forEach(p => list.appendChild(card(p)));
+  list.scrollTop = keep;
+  drawMarkers(shown);
+  sizeLayout();
+}
+function drawMarkers(shown) {
+  if (!map) return;
+  Object.values(markers).forEach(m => m.remove()); markers = {};
+  const pts = [];
+  shown.forEach(p => {
+    if (!p.glat) return;
+    const m = L.marker([p.glat, p.glon], { icon: L.divIcon({ className: "", html: '<div class="pin" style="width:16px;height:16px"></div>', iconSize: [16, 16] }) }).addTo(map);
+    m.bindTooltip(p.ko);
+    m.bindPopup(() => popupHtml(p), { maxWidth: 230, minWidth: 200, autoPanPadding: [20, 70] });
+    m.on("click", () => { if (!document.querySelector(".layout.showmap") && innerWidth > 820) { const el = $("p" + p.id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } } });
+    markers[p.id] = m; pts.push([p.glat, p.glon]);
+  });
+  if (pts.length && !map._fitted) { map.fitBounds(pts, { padding: [30, 30] }); map._fitted = true; }
+}
+function popupHtml(p) {
+  const img = p.photos[0] ? `<img src="${esc(photoUrl(p.photos[0], p))}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;display:block;margin-bottom:6px" alt="">` : "";
+  const amap = p.glat ? `https://uri.amap.com/marker?position=${(+p.glon).toFixed(6)},${(+p.glat).toFixed(6)}&name=${encodeURIComponent(p.zh || p.ko)}` : "";
+  const dist = (myPos && p.glat) ? ` · ${fmtDist(distM(myPos, [p.glat, p.glon]))}` : "";
+  return `${img}<div style="font-weight:700;font-size:15px">${esc(p.ko)}</div><div style="font-size:12px;color:var(--sub)">${[p.kind, p.price ? "¥" + p.price : ""].filter(Boolean).map(esc).join(" · ")}${dist}</div>
+    <div style="display:flex;gap:6px;margin-top:8px"><button data-detail="${esc(p.id)}" style="padding:4px 10px;font-size:13px">자세히</button>${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button style="padding:4px 10px;font-size:13px">Amap</button></a>` : ""}</div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-detail]"); if (!b) return;
+  const el = $("p" + b.dataset.detail); if (!el) return;
+  if (document.querySelector(".layout.showmap")) setView("list");
+  setTimeout(() => { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); }, 80);
+});
+function focusMap(p) { if (!p.glat) return toast("위치 정보가 없습니다"); setView("map"); map.setView([p.glat, p.glon], 17); markers[p.id]?.openTooltip(); }
+function setView(v) {
+  const lay = $("layout"); lay.classList.toggle("showmap", v === "map");
+  document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  setTimeout(() => map && map.invalidateSize(), 50);
+}
+$("mtabs").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) setView(b.dataset.v); });
+function sizeLayout() { document.documentElement.style.setProperty("--hh", ($("top").offsetHeight + $("filters").offsetHeight + (getComputedStyle($("mtabs")).display === "none" ? 0 : $("mtabs").offsetHeight)) + "px"); }
+window.addEventListener("resize", () => { sizeLayout(); map && map.invalidateSize(); });
+$("pic").addEventListener("click", () => $("pic").close());
+
+let myPos = null, myMarker = null, myCircle = null, watchId = null;
+const distM = (a, b) => { const R = 6371000, rad = x => x * Math.PI / 180, dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+const fmtDist = m => m < 1000 ? Math.round(m / 10) * 10 + "m" : (m / 1000).toFixed(1) + "km";
+function showMe(pos, center) {
+  const [la, lo] = gcj(pos.coords.latitude, pos.coords.longitude); myPos = [la, lo];
+  if (!myMarker) {
+    myCircle = L.circle(myPos, { radius: pos.coords.accuracy || 50, color: "#2563eb", weight: 1, fillOpacity: .1 }).addTo(map);
+    myMarker = L.circleMarker(myPos, { radius: 8, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 }).addTo(map);
+  } else { myMarker.setLatLng(myPos); myCircle.setLatLng(myPos).setRadius(pos.coords.accuracy || 50); }
+  if (center) map.setView(myPos, Math.max(map.getZoom(), 15));
+  render();
+}
+function stopMe() { if (watchId != null) navigator.geolocation.clearWatch(watchId); watchId = null; [myMarker, myCircle].forEach(x => x && x.remove()); myMarker = myCircle = myPos = null; F.near = false; document.querySelector(".locbtn")?.classList.remove("on"); render(); }
+function toggleMe() {
+  if (watchId != null) return stopMe();
+  if (!navigator.geolocation) return toast("위치를 지원하지 않는 브라우저입니다");
+  let first = true;
+  watchId = navigator.geolocation.watchPosition(pos => { showMe(pos, first); first = false; document.querySelector(".locbtn")?.classList.add("on"); },
+    err => { toast(err.code === 1 ? "위치 권한을 허용해 주세요" : "현재 위치를 찾지 못했습니다"); stopMe(); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+}
+function initMap() {
+  map = L.map("map", { zoomControl: true }).setView([38.93, 121.62], 11);
+  const Loc = L.Control.extend({ options: { position: "topright" }, onAdd() { const b = L.DomUtil.create("button", "locbtn"); b.textContent = "내 위치"; b.type = "button"; L.DomEvent.disableClickPropagation(b); b.addEventListener("click", toggleMe); return b; } });
+  new Loc().addTo(map);
+  L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", { subdomains: "1234", maxZoom: 18, minZoom: 8, attribution: "© 高德地图" }).addTo(map);
+}
+
+// ---------- 로그인 ----------
+async function refreshUser() {
+  if (!sb) return;
+  const { data } = await sb.auth.getSession(); user = data.session?.user || null; status = "";
+  if (user) { const p = await sb.from("profiles").select("status,display_name").eq("user_id", user.id).maybeSingle(); status = p.data?.status || ""; $("who").textContent = (p.data?.display_name || user.email) + (status === "pending" ? " · 승인 대기" : ""); }
+  else $("who").textContent = "";
+  $("login").textContent = user ? "로그아웃" : "로그인";
+  render();
+}
+$("login").addEventListener("click", async () => { if (user) { await sb.auth.signOut(); toast("로그아웃"); return refreshUser(); } $("logdlg").showModal(); });
+$("logcancel").addEventListener("click", () => $("logdlg").close());
+$("logform").addEventListener("submit", async e => {
+  e.preventDefault(); const f = $("logform"), m = e.submitter?.dataset.m || "in", email = f.email.value.trim(), password = f.pw.value;
+  $("logmsg").textContent = "";
+  if (!sb) return say("서버에 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요");
+  const btns = f.querySelectorAll("button[type=submit]"); btns.forEach(b => b.disabled = true);
+  try {
+    if (m === "up") {
+      const name = f.elements["name"].value.trim();
+      if (!name) return say("가입할 때는 이름을 입력해 주세요");
+      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name } } });
+      if (error) return say("가입하지 못했습니다: " + error.message);
+      if (!data.session) return say("이미 가입된 이메일일 수 있습니다. 로그인해 주세요");
+      toast("가입 완료. 관리자 승인 후 글을 쓸 수 있습니다");
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) return say(error.message === "Invalid login credentials" ? "이메일 또는 비밀번호가 맞지 않습니다" : "로그인하지 못했습니다: " + error.message);
+      toast("로그인했습니다");
+    }
+    $("logdlg").close(); f.reset(); refreshUser();
+  } catch (err) { say("연결에 실패했습니다: " + (err.message || err)); }
+  finally { btns.forEach(b => b.disabled = false); }
+});
+
+// ---------- 새 가게 추천 ----------
+let pending = [];
+async function shrink(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const k = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);   // 다시 인코딩하므로 EXIF(위치)가 지워진다
+  return await new Promise(r => c.toBlob(b => r(b), "image/webp", 0.8));
+}
+$("suggest").addEventListener("click", () => {
+  if (!user) { toast("로그인이 필요합니다"); return $("logdlg").showModal(); }
+  if (status !== "approved") return toast(status === "pending" ? "관리자 승인 후 추천할 수 있습니다" : "추천할 수 없는 계정입니다");
+  $("sugform").reset(); pending = []; $("prev").innerHTML = ""; $("sugdlg").showModal();
+});
+$("sugcancel").addEventListener("click", () => $("sugdlg").close());
+$("geo").addEventListener("click", () => {
+  if (!navigator.geolocation) return toast("위치를 지원하지 않는 브라우저입니다");
+  navigator.geolocation.getCurrentPosition(p => { $("sugform").lat.value = p.coords.latitude.toFixed(6); $("sugform").lon.value = p.coords.longitude.toFixed(6); }, () => toast("위치를 가져오지 못했습니다"), { enableHighAccuracy: true, timeout: 10000 });
+});
+$("sugform").photos.addEventListener("change", async e => {
+  const files = [...e.target.files]; if (files.length > 10) toast("사진은 10장까지");
+  pending = [];
+  for (const f of files.slice(0, 10)) { try { pending.push(await shrink(f)); } catch (err) { toast("읽지 못한 사진이 있습니다"); } }
+  $("prev").innerHTML = pending.map(b => `<img src="${URL.createObjectURL(b)}" alt="">`).join("");
+});
+$("sugform").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!pending.length) return say("사진을 한 장 이상 넣어 주세요");
+  const f = $("sugform"), g = k => f[k].value.trim(), btn = $("sugsend"); btn.disabled = true;
+  try {
+    const urls = [], stamp = Date.now();
+    for (let i = 0; i < pending.length; i++) {
+      const path = `${user.id}/${stamp}-${i}.webp`;
+      const up = await sb.storage.from("photos").upload(path, pending[i], { contentType: "image/webp" });
+      if (up.error) throw up.error;
+      urls.push(sb.storage.from("photos").getPublicUrl(path).data.publicUrl);
+    }
+    const lat = g("lat") === "" ? null : Number(g("lat")), lon = g("lon") === "" ? null : Number(g("lon"));
+    if ((lat !== null && !isFinite(lat)) || (lon !== null && !isFinite(lon))) throw new Error("위도·경도는 숫자로 입력해 주세요");
+    const { error } = await sb.from("suggestions").insert({ ko: g("ko"), zh: g("zh"), lat, lon, price: g("price"), kind: g("kind"), menu: g("menu"), note: g("note"), photos: urls });
+    if (error) throw error;
+    $("sugdlg").close(); toast("제출했습니다. 관리자 확인 후 공개됩니다");
+  } catch (err) { say("제출하지 못했습니다: " + (err.message || err)); }
+  btn.disabled = false;
+});
+
+// ---------- 중국어 이름 -> 한글 표기(중국어 표기법을 단순화한 규칙. 참고용이라 사람이 고칠 수 있다) ----------
+const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ", JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ", JONG = ["", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "ㄻ", "ㄼ", "ㄽ", "ㄾ", "ㄿ", "ㅀ", "ㅁ", "ㅂ", "ㅄ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+const syl = (on, v, c = "") => String.fromCharCode(0xAC00 + (CHO.indexOf(on) * 21 + JUNG.indexOf(v)) * 28 + JONG.indexOf(c));
+const ONSET = { b: "ㅂ", p: "ㅍ", m: "ㅁ", f: "ㅍ", d: "ㄷ", t: "ㅌ", n: "ㄴ", l: "ㄹ", g: "ㄱ", k: "ㅋ", h: "ㅎ", j: "ㅈ", q: "ㅊ", x: "ㅅ", zh: "ㅈ", ch: "ㅊ", sh: "ㅅ", r: "ㄹ", z: "ㅉ", c: "ㅊ", s: "ㅆ" };
+// 일반 자음 뒤의 운모: [모음, 받침, 뒤에 붙는 글자]
+const FIN = { a: ["ㅏ", "", ""], o: ["ㅓ", "", ""], e: ["ㅓ", "", ""], ai: ["ㅏ", "", "이"], ei: ["ㅔ", "", "이"], ao: ["ㅏ", "", "오"], ou: ["ㅓ", "", "우"], an: ["ㅏ", "ㄴ", ""], en: ["ㅓ", "ㄴ", ""], ang: ["ㅏ", "ㅇ", ""], eng: ["ㅓ", "ㅇ", ""], ong: ["ㅜ", "ㅇ", ""], er: ["ㅓ", "ㄹ", ""],
+  i: ["ㅣ", "", ""], ia: ["ㅑ", "", ""], ie: ["ㅖ", "", ""], iao: ["ㅑ", "", "오"], iu: ["ㅠ", "", ""], ian: ["ㅖ", "ㄴ", ""], in: ["ㅣ", "ㄴ", ""], iang: ["ㅑ", "ㅇ", ""], ing: ["ㅣ", "ㅇ", ""], iong: ["ㅠ", "ㅇ", ""],
+  u: ["ㅜ", "", ""], ua: ["ㅘ", "", ""], uo: ["ㅝ", "", ""], uai: ["ㅘ", "", "이"], ui: ["ㅜ", "", "이"], uan: ["ㅘ", "ㄴ", ""], un: ["ㅜ", "ㄴ", ""], uang: ["ㅘ", "ㅇ", ""], v: ["ㅟ", "", ""], ve: ["ㅟ", "", "에"], van: ["ㅟ", "", "안"], vn: ["ㅟ", "ㄴ", ""] };
+const BPMF_O = { o: ["ㅗ", "", ""] };
+const SPECIAL = { zhi: "즈", chi: "츠", shi: "스", ri: "르", zi: "쯔", ci: "츠", si: "쓰", er: "얼",
+  ya: "야", yo: "요", ye: "예", yao: "야오", you: "유", yan: "옌", yin: "인", yang: "양", ying: "잉", yong: "융", yi: "이", yu: "위", yue: "웨", yuan: "위안", yun: "윈",
+  wa: "와", wo: "워", wai: "와이", wei: "웨이", wan: "완", wen: "원", wang: "왕", weng: "웡", wu: "우", a: "아", o: "오", e: "어", ai: "아이", ei: "에이", ao: "아오", ou: "어우", an: "안", en: "언", ang: "앙", eng: "엉" };
+// j q x 뒤: u 계열은 ü, ia/ie/iao/iu/ian/iang/iong 는 ㅈ·ㅊ 뒤에서 ㅑ·ㅖ 등을 풀어 쓴다
+const PAL = { ia: ["ㅏ", "", ""], ie: ["ㅔ", "", ""], iao: ["ㅏ", "", "오"], iu: ["ㅜ", "", ""], ian: ["ㅔ", "ㄴ", ""], iang: ["ㅏ", "ㅇ", ""], iong: ["ㅜ", "ㅇ", ""],
+  u: ["ㅟ", "", ""], ue: ["ㅞ", "", ""], uan: ["ㅟ", "", "안"], un: ["ㅟ", "ㄴ", ""] };
+const PAL_X = { ia: ["ㅑ", "", ""], ie: ["ㅖ", "", ""], iao: ["ㅑ", "", "오"], iu: ["ㅠ", "", ""], ian: ["ㅖ", "ㄴ", ""], iang: ["ㅑ", "ㅇ", ""], iong: ["ㅠ", "ㅇ", ""],
+  u: ["ㅟ", "", ""], ue: ["ㅞ", "", ""], uan: ["ㅟ", "", "안"], un: ["ㅟ", "ㄴ", ""] };
+function pyToHangul(py) {
+  py = py.toLowerCase().replace(/ü/g, "v");
+  if (SPECIAL[py]) return SPECIAL[py];
+  const on = /^(zh|ch|sh)/.test(py) ? py.slice(0, 2) : py[0], fin = py.slice(on.length);
+  if (!ONSET[on]) return py;
+  let t;
+  if ("jqx".includes(on)) t = ((on === "x" ? PAL_X : PAL)[fin]) || FIN[fin];
+  else if ("bpmf".includes(on) && BPMF_O[fin]) t = BPMF_O[fin];
+  else if ("nl".includes(on) && (fin === "u" || fin === "ve" || fin === "v")) t = fin === "u" ? FIN.u : FIN[fin];
+  else t = FIN[fin];
+  if (!t) return py;
+  return syl(ONSET[on], t[0], t[1]) + t[2];
+}
+function zhToKo(text) {
+  if (!window.pinyinPro) return "";
+  const head = text.split(/[(（\[]/)[0];           // 지점 표기는 뺀다: 海底捞火锅(安盛店) -> 海底捞火锅
+  return [...head].map(ch => /[一-鿿]/.test(ch) ? pyToHangul(pinyinPro.pinyin(ch, { toneType: "none", type: "array" })[0] || "") : ch).join("").replace(/\s+/g, " ").trim();
+}
+// 한글 이름 칸은 아직 사람이 손대지 않았을 때만 자동으로 채운다
+(() => {
+  const f = $("sugform"); let auto = true;
+  f.elements["ko"].addEventListener("input", () => { auto = false; });
+  f.elements["zh"].addEventListener("input", () => { if (auto || !f.elements["ko"].value.trim()) { f.elements["ko"].value = zhToKo(f.elements["zh"].value); auto = true; } });
+  $("suggest").addEventListener("click", () => { auto = true; });
+})();
+
+initMap(); load(); refreshUser();
+if (sb) sb.auth.onAuthStateChange(() => refreshUser());
+</script>
+</body>
+</html>
