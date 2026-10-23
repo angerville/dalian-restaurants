@@ -64,6 +64,13 @@ form.dlg h2{font-size:17px;margin:0}
 .msg{min-height:20px;font-size:13px;color:var(--accent)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:2000}
 #toast.show{opacity:1}
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:1050;background:var(--bg);border-radius:14px 14px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.25);max-height:46vh;display:none;flex-direction:column}
+#sheet.open{display:flex}
+#sheet .sh{display:flex;justify-content:flex-end;padding:6px 10px;border-bottom:1px solid var(--line)}
+#sheetbody{overflow:auto;padding:4px 10px 16px}
+#sheetbody .card{border:0}
+#sheetbody .gal img{aspect-ratio:16/10}
+@media(min-width:821px){#sheet{display:none!important}}
 .locbtn{background:#fff;border:2px solid rgba(0,0,0,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
 .locbtn.on{background:#2563eb;color:#fff;border-color:#2563eb}
 .pin{background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
@@ -116,6 +123,7 @@ form.dlg h2{font-size:17px;margin:0}
   <div class="msg" id="sugmsg"></div>
   <div class="actions"><button type="button" id="sugcancel">취소</button><button type="submit" class="on" id="sugsend">제출</button></div>
 </form></dialog>
+<div id="sheet"><div class="sh"><button id="sheetclose">닫기</button></div><div id="sheetbody"></div></div>
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -244,6 +252,7 @@ function render() {
   shown.forEach(p => list.appendChild(card(p)));
   list.scrollTop = keep;
   drawMarkers(shown);
+  if (sheetId) drawSheet();
   sizeLayout();
 }
 function drawMarkers(shown) {
@@ -254,30 +263,38 @@ function drawMarkers(shown) {
     if (!p.glat) return;
     const m = L.marker([p.glat, p.glon], { icon: L.divIcon({ className: "", html: '<div class="pin" style="width:16px;height:16px"></div>', iconSize: [16, 16] }) }).addTo(map);
     m.bindTooltip(p.ko);
-    m.bindPopup(() => popupHtml(p), { maxWidth: 230, minWidth: 200, autoPanPadding: [20, 70] });
-    m.on("click", () => { if (!document.querySelector(".layout.showmap") && innerWidth > 820) { const el = $("p" + p.id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } } });
+    m.on("click", () => { if (innerWidth <= 820) return openSheet(p); const el = $("p" + p.id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } });
     markers[p.id] = m; pts.push([p.glat, p.glon]);
   });
-  if (pts.length && !map._fitted) { map.fitBounds(pts, { padding: [30, 30] }); map._fitted = true; }
+  map._pts = pts;
+  if (pts.length && !map._fitted && map.getSize().x > 0) { map.fitBounds(pts, { padding: [30, 30] }); map._fitted = true; }   // 숨겨진 지도(크기 0)에서 맞추면 최대 확대가 되므로 보일 때까지 미룬다
 }
-function popupHtml(p) {
-  const img = p.photos[0] ? `<img src="${esc(photoUrl(p.photos[0], p))}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;display:block;margin-bottom:6px" alt="">` : "";
-  const amap = p.glat ? `https://uri.amap.com/marker?position=${(+p.glon).toFixed(6)},${(+p.glat).toFixed(6)}&name=${encodeURIComponent(p.zh || p.ko)}` : "";
-  const dist = (myPos && p.glat) ? ` · ${fmtDist(distM(myPos, [p.glat, p.glon]))}` : "";
-  return `${img}<div style="font-weight:700;font-size:15px">${esc(p.ko)}</div><div style="font-size:12px;color:var(--sub)">${[p.kind, p.price ? "¥" + p.price : ""].filter(Boolean).map(esc).join(" · ")}${dist}</div>
-    <div style="display:flex;gap:6px;margin-top:8px"><button data-detail="${esc(p.id)}" style="padding:4px 10px;font-size:13px">자세히</button>${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button style="padding:4px 10px;font-size:13px">Amap</button></a>` : ""}</div>`;
+let sheetId = null;
+function openSheet(p) { sheetId = p.id; drawSheet(true); }
+function closeSheet() { sheetId = null; $("sheet").classList.remove("open"); $("sheetbody").innerHTML = ""; }
+function drawSheet(pan) {
+  const p = PLACES.find(x => x.id === sheetId); if (!p) return closeSheet();
+  const body = $("sheetbody"), keep = body.scrollTop; body.innerHTML = "";
+  const c = card(p); c.removeAttribute("id"); c.querySelector("[data-pin]")?.remove(); body.appendChild(c); body.scrollTop = keep;
+  $("sheet").classList.add("open");
+  if (pan && p.glat && map) {   // 헤더 아래로 지도를 끌어올리고, 마커가 시트에 가리지 않는 중앙에 오도록 옮긴다
+    const mapEl = $("map"), hdr = $("top").offsetHeight, mt = mapEl.getBoundingClientRect().top;
+    if (mt > hdr + 2) window.scrollBy(0, mt - hdr);
+    setTimeout(() => {
+      map.invalidateSize();
+      const mr = mapEl.getBoundingClientRect(), visTop = Math.max(0, hdr - mr.top), visBottom = $("sheet").getBoundingClientRect().top - mr.top;
+      const target = (visTop + visBottom) / 2, pt = map.latLngToContainerPoint([p.glat, p.glon]);
+      if (pt.y < visTop + 20 || pt.y > visBottom - 20 || pt.x < 20 || pt.x > map.getSize().x - 20) map.panBy([pt.x - map.getSize().x / 2, pt.y - target], { animate: true });
+    }, 120);
+  }
 }
-document.addEventListener("click", e => {
-  const b = e.target.closest("[data-detail]"); if (!b) return;
-  const el = $("p" + b.dataset.detail); if (!el) return;
-  if (document.querySelector(".layout.showmap")) setView("list");
-  setTimeout(() => { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); }, 80);
-});
+$("sheetclose").addEventListener("click", closeSheet);
 function focusMap(p) { if (!p.glat) return toast("위치 정보가 없습니다"); setView("map"); map.setView([p.glat, p.glon], 17); markers[p.id]?.openTooltip(); }
 function setView(v) {
+  if (v === "list") closeSheet();
   const lay = $("layout"); lay.classList.toggle("showmap", v === "map");
   document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
-  setTimeout(() => map && map.invalidateSize(), 50);
+  setTimeout(() => { if (!map) return; map.invalidateSize(); if (!map._fitted && map._pts && map._pts.length && map.getSize().x > 0) { map.fitBounds(map._pts, { padding: [30, 30] }); map._fitted = true; } }, 60);
 }
 $("mtabs").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) setView(b.dataset.v); });
 function sizeLayout() { document.documentElement.style.setProperty("--hh", ($("top").offsetHeight + $("filters").offsetHeight + (getComputedStyle($("mtabs")).display === "none" ? 0 : $("mtabs").offsetHeight)) + "px"); }
@@ -306,6 +323,7 @@ function toggleMe() {
 }
 function initMap() {
   map = L.map("map", { zoomControl: true }).setView([38.93, 121.62], 11);
+  map.on("click", () => closeSheet());
   const Loc = L.Control.extend({ options: { position: "topright" }, onAdd() { const b = L.DomUtil.create("button", "locbtn"); b.textContent = "내 위치"; b.type = "button"; L.DomEvent.disableClickPropagation(b); b.addEventListener("click", toggleMe); return b; } });
   new Loc().addTo(map);
   L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", { subdomains: "1234", maxZoom: 18, minZoom: 8, attribution: "© 高德地图" }).addTo(map);
@@ -435,7 +453,7 @@ function zhToKo(text) {
 })();
 
 initMap(); load(); refreshUser();
-if (sb) sb.auth.onAuthStateChange(() => refreshUser());
+if (sb) sb.auth.onAuthStateChange(() => { setTimeout(refreshUser, 0); });  // 콜백 안에서 Supabase 함수를 기다리면 교착이 생기므로 밖으로 뺀다
 </script>
 </body>
 </html>
