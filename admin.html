@@ -137,7 +137,7 @@ async function viewSuggest(main) {
   const { data, error } = await sb.from("suggestions").select("*").eq("status", "pending").order("created_at");
   if (error) return main.innerHTML = `<div class="card">${esc(error.message)}</div>`;
   main.innerHTML = data.length ? data.map(s => `<div class="card" data-id="${s.id}">
-    <div><span class="name">${esc(s.ko)}</span> <span class="sub">${esc(s.author_name || "")} · ${fmt(s.created_at)}</span></div>
+    <div><span class="name">${esc(s.ko)}</span>${s.target_place ? ' <span class="badge ok">가게 ' + esc(s.target_place) + '에 내용 추가</span>' : ""} <span class="sub">${esc(s.author_name || "")} · ${fmt(s.created_at)}</span></div>
     <div class="photos">${(s.photos || []).map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join("")}</div>
     <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <label>한글 이름<input type="text" data-f="ko" value="${esc(s.ko)}"></label><label>Amap 이름<input type="text" data-f="zh" value="${esc(s.zh)}"></label>

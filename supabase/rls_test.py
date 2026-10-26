@@ -163,6 +163,22 @@ def run():
         r = requests.delete(rest(f"suggestions?id=eq.{sid}"), headers=hdr(to, prefer))
         T.check("승인된 다른 사람은 남의 제안을 못 지움", denied(r), r.text[:120])
 
+    print("== 이미 있는 가게에 내용 추가")
+    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "추가 정보 시험", "menu": "새우죽", "target_place": "2"})
+    aok = r.status_code in (200, 201) and bool(r.json())
+    T.check("이미 있는 가게에 내용 추가 제출(대기)", aok and r.json()[0]["status"] == "pending" and r.json()[0]["target_place"] == "2", r.text[:160])
+    aid = r.json()[0]["id"] if aok else None
+    if aid:
+        r = requests.patch(rest(f"suggestions?id=eq.{aid}"), headers=hdr(tu, prefer), json={"target_place": "3", "menu": "새우죽, 만두"})
+        row = r.json()[0] if r.status_code == 200 and r.json() else {}
+        T.check("내용은 고칠 수 있지만 대상 가게는 바꿀 수 없음", row.get("menu") == "새우죽, 만두" and row.get("target_place") == "2", r.text[:200])
+        T.check("승인 전 추가 내용은 방문자에게 안 보임", requests.get(rest(f"suggestions?id=eq.{aid}&select=id"), headers=hdr()).json() == [])
+        requests.patch(rest(f"suggestions?id=eq.{aid}"), headers=hdr(ta, prefer), json={"status": "approved"})
+        seen = requests.get(rest(f"suggestions?id=eq.{aid}&select=target_place,menu"), headers=hdr()).json()
+        T.check("승인된 추가 내용은 방문자에게 보임", len(seen) == 1 and seen[0]["target_place"] == "2", str(seen))
+        r = requests.delete(rest(f"suggestions?id=eq.{aid}"), headers=hdr(tu, prefer))
+        T.check("본인이 추가한 내용을 삭제", r.status_code == 200 and bool(r.json()), r.text[:120])
+
     print("== 사진 저장소")
     sp = {"apikey": ANON, "Authorization": "Bearer " + tu}
     tiny = b"RIFF\x1a\x00\x00\x00WEBPVP8L\x0d\x00\x00\x00/\x00\x00\x00\x10\x07\x10\x11\x11\x88\x88\xfe\x07\x00"

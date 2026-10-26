@@ -46,6 +46,7 @@ create table if not exists public.suggestions (
   photos      text[] not null default '{}' check (coalesce(array_length(photos, 1), 0) <= 10),
   status      text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   admin_note  text not null default '',
+  target_place text not null default '' check (char_length(target_place) <= 40),   -- 비어 있지 않으면 '이미 있는 가게에 덧붙이는 내용'
   created_at  timestamptz not null default now()
 );
 
@@ -174,6 +175,7 @@ create policy photos_delete on storage.objects for delete to authenticated
 -- 고칠 수 없는 항목(상태, 관리자 메모, 작성자, 숨김 여부, 어느 가게의 댓글인지)은 아래 트리거가 원래 값으로 되돌린다.
 alter table public.comments    add column if not exists updated_at timestamptz;
 alter table public.suggestions add column if not exists updated_at timestamptz;
+alter table public.suggestions add column if not exists target_place text not null default '' check (char_length(target_place) <= 40);
 
 create or replace function public.guard_update() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -186,7 +188,7 @@ begin
     new.place_no := old.place_no; new.hidden := old.hidden;
     new.updated_at := case when new.body is distinct from old.body then now() else old.updated_at end;
   else
-    new.status := old.status; new.admin_note := old.admin_note;
+    new.status := old.status; new.admin_note := old.admin_note; new.target_place := old.target_place;
     new.updated_at := case when (new.ko, new.zh, new.lat, new.lon, new.price, new.kind, new.menu, new.note, new.photos)
                               is distinct from (old.ko, old.zh, old.lat, old.lon, old.price, old.kind, old.menu, old.note, old.photos)
                            then now() else old.updated_at end;

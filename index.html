@@ -73,10 +73,35 @@ form.dlg h2{font-size:17px;margin:0}
 #sheetbody .card{border:0}
 #sheetbody .gal img{aspect-ratio:16/10}
 @media(min-width:821px){#sheet{display:none!important}}
+.pin.cl{background:#111827;color:#fff;font:600 12px/22px Pretendard,sans-serif;text-align:center;border:2px solid #fff}
+.lbl.always{display:block}
+.lbl.left{left:auto;right:20px}
 .lbl{display:none;position:absolute;left:20px;top:-1px;white-space:nowrap;font-size:12px;font-weight:600;color:#111827;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;pointer-events:none}
 .show-labels .lbl{display:block}
-.pvw{position:relative}
-.pvw button{position:absolute;right:2px;top:2px;padding:0 6px;font-size:12px;background:rgba(255,255,255,.92)}
+.pvw{position:relative;width:96px}
+.prev .pvw img{width:96px;height:96px;object-fit:cover;border-radius:8px;display:block}
+.pvw .ord{position:absolute;left:4px;top:4px;background:rgba(0,0,0,.5);color:#fff;border-radius:999px;font-size:11px;padding:0 7px}
+.pvw .pb{display:flex;gap:2px;margin-top:3px}
+.pvw .pb button{flex:1;padding:2px 0;font-size:13px}
+#pick{height:210px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-top:2px}
+.dup{border:1px solid var(--accent);border-radius:10px;padding:8px 10px;display:grid;gap:6px;background:#fff7f1}
+.dup .dh{font-size:13px;font-weight:600;color:var(--accent)}
+.dup .dr{display:flex;gap:8px;justify-content:space-between;align-items:center}
+.dup .dr button{padding:3px 10px;font-size:13px}
+select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;background:var(--bg)}
+.gwrap{position:relative}
+.gal{scrollbar-width:none}
+.gal::-webkit-scrollbar{display:none}
+.gnav{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.38);color:#fff;font-size:24px;line-height:1;padding:0 0 3px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.gnav:hover{background:rgba(0,0,0,.55)}
+.gprev{left:8px}.gnext{right:8px}
+.gcount{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.45);color:#fff;border-radius:999px;font-size:12px;padding:1px 9px}
+.adds{margin-top:10px;display:grid;gap:8px}
+.add{background:var(--soft);border-radius:10px;padding:8px 10px}
+.add .by{font-size:12px;color:var(--sub)}
+.add .by button{border:0;padding:0 4px;font-size:12px;color:var(--sub);background:none}
+.aph{display:flex;gap:6px;overflow-x:auto;margin-top:6px}
+.aph img{width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;flex:none}
 .locbtn{background:#fff;border:2px solid rgba(0,0,0,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
 .locbtn.on{background:#2563eb;color:#fff;border-color:#2563eb}
 .pin{background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
@@ -119,17 +144,22 @@ form.dlg h2{font-size:17px;margin:0}
 
 <dialog id="sugdlg"><form class="dlg" id="sugform">
   <h2 id="sugtitle">새 가게 추천</h2>
-  <div class="g2"><label>한글 이름<input type="text" name="ko" required maxlength="100"></label><label>Amap 이름<input type="text" name="zh" maxlength="200"></label></div>
-  <div class="g2"><label>위도<input type="text" name="lat" inputmode="decimal"></label><label>경도<input type="text" name="lon" inputmode="decimal"></label></div>
-  <div class="actions" style="justify-content:flex-start"><button type="button" id="geo">현재 위치</button></div>
-  <div class="g2"><label>인당 가격(위안)<input type="text" name="price" maxlength="40"></label><label>음식 종류<input type="text" name="kind" maxlength="60"></label></div>
-  <label>추천 메뉴<input type="text" name="menu" maxlength="300"></label>
+  <div id="dup" class="dup" style="display:none"></div>
+  <div id="sugaddnote" class="by" style="display:none;color:var(--sub)">추천 메뉴, 가격, 메모, 사진 중 알려 주고 싶은 것을 적어 주세요. <button type="button" id="sugback">새 가게로 등록</button></div>
+  <div id="sugnew">
+    <div class="g2"><label>Amap 이름(중국어 이름)<input type="text" name="zh" maxlength="200"></label><label>한글 이름<input type="text" name="ko" required maxlength="100"></label></div>
+    <label style="margin-top:10px">위치(지도를 눌러 표시)<div id="pick"></div></label>
+    <div class="actions" style="justify-content:flex-start;margin-top:6px"><button type="button" id="geo">현재 위치로 이동</button></div>
+    <div class="g2" style="margin-top:10px"><label>음식 종류<select name="cat"></select></label><label>세부 종류(선택)<input type="text" name="detail" maxlength="40" placeholder="예: 동북요리, 양꼬치"></label></div>
+  </div>
+  <div class="g2"><label>인당 가격(위안)<input type="text" name="price" maxlength="40"></label><label>추천 메뉴<input type="text" name="menu" maxlength="300"></label></div>
   <label>메모<textarea name="note" rows="3" maxlength="1500"></textarea></label>
   <label>사진(최대 10장)<input type="file" name="photos" accept="image/*" multiple></label>
   <div class="prev" id="prev"></div>
   <div class="msg" id="sugmsg"></div>
   <div class="actions"><button type="button" id="sugcancel">취소</button><button type="submit" class="on" id="sugsend">제출</button></div>
 </form></dialog>
+
 <dialog id="mydlg"><form class="dlg" id="myform">
   <h2>내 글</h2>
   <div id="mylist" style="display:grid;gap:8px"></div>
@@ -151,10 +181,10 @@ const say = t => { const m = document.querySelector("dialog[open] .msg"); if (m)
 const toast = t => { const el = $("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); };
 const PRICE_BANDS = [["~60", 0, 60], ["60~100", 60, 100], ["100~150", 100, 150], ["150~", 150, 1e9]];
 
-let PLACES = [], COMMENTS = {}, map, markers = {}, user = null, status = "";
+let PLACES = [], COMMENTS = {}, ADDS = {}, map, markers = {}, user = null, status = "";
 const F = { q: "", tag: new Set(), region: new Set(), price: new Set(), near: false };
 const openComments = new Set();
-let editingC = null, editRow = null, keepPhotos = [], removedPhotos = [], fromMine = false;
+let editingC = null, editRow = null, items = [], origPhotos = [], fromMine = false;   // items: 사진 목록(기존 {url}, 새로 고른 {blob, src}) — 순서가 곧 보이는 순서
 
 // ---------- 데이터 ----------
 async function load() {
@@ -166,7 +196,10 @@ async function load() {
       sb.from("suggestions").select("*").eq("status", "approved").order("created_at"),
       sb.from("comments").select("*").eq("hidden", false).order("created_at"),
     ]);
-    if (s.data) PLACES = PLACES.concat(s.data.map(toPlace));
+    if (s.data) {
+      PLACES = PLACES.concat(s.data.filter(x => !x.target_place).map(toPlace));
+      ADDS = {}; s.data.filter(x => x.target_place).forEach(x => (ADDS[x.target_place] ||= []).push(x));   // 이미 있는 가게에 덧붙인 내용
+    }
     COMMENTS = {};
     (c.data || []).forEach(x => (COMMENTS[x.place_no] ||= []).push(x));
     if (s.error || c.error) toast("댓글을 불러오지 못했습니다");
@@ -174,8 +207,8 @@ async function load() {
   render();
 }
 function toPlace(s) {
-  const m = (s.price || "").match(/\d+/), tags = [];
-  return { id: "s" + s.id, ko: s.ko, zh: s.zh, kind: s.kind, tags: tags.length ? tags : ["새 제안"], price: s.price, priceMin: m ? +m[0] : null, region: "",
+  const m = (s.price || "").match(/\d+/), tags = [kindTag(s.kind)];
+  return { id: "s" + s.id, ko: s.ko, zh: s.zh, kind: s.kind, tags, price: s.price, priceMin: m ? +m[0] : null, region: "",
     lat: s.lat, lon: s.lon, glat: s.lat ? gcj(+s.lat, +s.lon)[0] : null, glon: s.lat ? gcj(+s.lat, +s.lon)[1] : null,
     menu: s.menu, note: s.note, photos: s.photos || [], nFood: (s.photos || []).length, url: true, by: s.author_name, uid: s.user_id, raw: s };
 }
@@ -224,7 +257,7 @@ function card(p) {
   const cs = COMMENTS[p.id] || [], open = openComments.has(p.id);
   const amap = p.glat ? `https://uri.amap.com/marker?position=${(+p.glon).toFixed(6)},${(+p.glat).toFixed(6)}&name=${encodeURIComponent(p.zh || p.ko)}` : "";
   el.innerHTML = `
-    ${p.photos.length ? `<div class="gal ${p.photos.length === 1 ? "one" : ""}">${p.photos.map((f, i) => `<img src="${esc(photoUrl(f, p))}" ${i ? 'loading="lazy"' : ""} alt="${esc(p.ko)}" data-big>`).join("")}</div>` : ""}
+    ${p.photos.length ? `<div class="gwrap"><div class="gal ${p.photos.length === 1 ? "one" : ""}">${p.photos.map((f, i) => `<img src="${esc(photoUrl(f, p))}" ${i ? 'loading="lazy"' : ""} alt="${esc(p.ko)}" data-big>`).join("")}</div>${p.photos.length > 1 ? `<button type="button" class="gnav gprev" aria-label="이전 사진">‹</button><button type="button" class="gnav gnext" aria-label="다음 사진">›</button><span class="gcount">1/${p.photos.length}</span>` : ""}</div>` : ""}
     <div class="body">
       <div><span class="nm">${esc(p.ko)}</span>${p.url ? '<span class="tag">추천</span>' : ""}</div>
       ${p.zh ? `<div class="zh">${esc(p.zh)}</div>` : ""}
@@ -232,6 +265,7 @@ function card(p) {
       ${p.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(p.menu)}</div>` : ""}
       ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
       ${p.by ? `<div class="meta">추천 ${esc(p.by)}</div>` : ""}
+      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && a.user_id === user.id && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
       <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && p.uid === user.id && status === "approved") ? "<button data-edits>수정</button>" : ""}</div>
       ${open ? `<div class="cm">${cs.map(c => c.id === editingC
       ? `<div class="c"><form data-ec="${c.id}" style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" required>${esc(c.body)}</textarea><div class="actions"><button type="button" data-cancelc>취소</button><button type="submit" class="on">저장</button></div></form></div>`
@@ -257,6 +291,8 @@ function card(p) {
     editingC = null; toast("수정했습니다"); load();
   }));
   el.querySelector("[data-edits]")?.addEventListener("click", () => openEdit(p.raw));
+  el.querySelectorAll("[data-editadd]").forEach(b => b.addEventListener("click", () => openEdit((ADDS[p.id] || []).find(a => String(a.id) === b.dataset.editadd))));
+  setupGallery(el, p);
   const cf = el.querySelector("[data-cf]");
   if (cf) cf.addEventListener("submit", async e => {
     e.preventDefault(); const ta = cf.querySelector("textarea"), btn = cf.querySelector("button");
@@ -267,6 +303,20 @@ function card(p) {
     ta.value = ""; load();
   });
   return el;
+}
+const galPos = {};   // 카드를 다시 그려도 보던 사진 위치를 기억한다
+function setupGallery(el, p) {
+  const g = el.querySelector(".gal"); if (!g) return;
+  const prev = el.querySelector(".gprev"), next = el.querySelector(".gnext"), cnt = el.querySelector(".gcount"), n = p.photos.length;
+  const upd = () => {
+    const i = Math.min(n - 1, Math.max(0, Math.round(g.scrollLeft / Math.max(1, g.clientWidth)))); galPos[p.id] = i;
+    if (cnt) cnt.textContent = `${i + 1}/${n}`; if (prev) prev.style.display = i === 0 ? "none" : ""; if (next) next.style.display = i === n - 1 ? "none" : "";
+  };
+  g.addEventListener("scroll", upd, { passive: true });
+  prev?.addEventListener("click", () => g.scrollBy({ left: -g.clientWidth, behavior: "smooth" }));
+  next?.addEventListener("click", () => g.scrollBy({ left: g.clientWidth, behavior: "smooth" }));
+  upd();   // 처음에는 이전 버튼을 숨긴다
+  requestAnimationFrame(() => { if (galPos[p.id]) g.scrollLeft = galPos[p.id] * g.clientWidth; upd(); });
 }
 function render() {
   renderFilters();
@@ -288,20 +338,66 @@ function markerLabel(p) {   // 가게가 직접 쓴 종류의 첫 항목(괄호 
   return t ? `${p.ko}(${t})` : p.ko;
 }
 function updateLabels() { if (map) map.getContainer().classList.toggle("show-labels", map.getZoom() >= LABEL_ZOOM); }
-function drawMarkers(shown) {
+const GROUP_PX = 26;   // 화면에서 이 거리(px) 안에 모인 가게는 하나로 묶어 보인다
+let clusterMarkers = [], spiderLayer = null, spiderKey = null, drawnShown = [];
+const keyOf = g => g.items.map(o => o.p.id).sort().join("|");
+function groupPlaces(list) {
+  const groups = [];
+  list.filter(p => p.glat).forEach(p => {
+    const pt = map.latLngToContainerPoint([p.glat, p.glon]), o = { p, pt };
+    const g = groups.find(g => Math.hypot(g.cx - pt.x, g.cy - pt.y) <= GROUP_PX);
+    if (g) { g.items.push(o); g.cx = g.items.reduce((t, i) => t + i.pt.x, 0) / g.items.length; g.cy = g.items.reduce((t, i) => t + i.pt.y, 0) / g.items.length; }
+    else groups.push({ items: [o], cx: pt.x, cy: pt.y });
+  });
+  return groups;
+}
+function onPlaceClick(p) {
+  if (innerWidth <= 820) return openSheet(p);
+  const el = $("p" + p.id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); }
+}
+function addPlaceMarker(p, ll, spider, left) {
+  const cls = spider ? "lbl always" + (left ? " left" : "") : "lbl";
+  const m = L.marker(ll || [p.glat, p.glon], { icon: L.divIcon({ className: "", html: `<div class="pin" style="width:16px;height:16px"></div><span class="${cls}">${esc(markerLabel(p))}</span>`, iconSize: [16, 16] }) }).addTo(spider ? spiderLayer : map);
+  m.bindTooltip(p.ko);
+  m.on("click", () => onPlaceClick(p));
+  markers[p.id] = m;
+}
+function drawSpider(g) {   // 묶음을 눌렀을 때: 가게마다 동그라미를 둥글게 펼치고 이름을 보인다
+  spiderLayer = L.layerGroup().addTo(map);
+  const n = g.items.length, R = Math.max(40, 14 + n * 9), c = L.point(g.cx, g.cy), cl = map.containerPointToLatLng(c);
+  g.items.forEach((o, i) => {
+    const ang = -Math.PI / 2 + 2 * Math.PI * i / n, ll = map.containerPointToLatLng(L.point(c.x + R * Math.cos(ang), c.y + R * Math.sin(ang)));
+    L.polyline([cl, ll], { color: "#9ca3af", weight: 1.5, interactive: false }).addTo(spiderLayer);
+    addPlaceMarker(o.p, ll, true, Math.cos(ang) < -0.2);
+  });
+  L.circleMarker(cl, { radius: 5, color: "#fff", weight: 2, fillColor: "#6b7280", fillOpacity: 1 }).on("click", () => { spiderKey = null; layoutMarkers(); }).addTo(spiderLayer);
+}
+function layoutMarkers() {
   if (!map) return;
   Object.values(markers).forEach(m => m.remove()); markers = {};
-  const pts = [];
-  shown.forEach(p => {
-    if (!p.glat) return;
-    const m = L.marker([p.glat, p.glon], { icon: L.divIcon({ className: "", html: `<div class="pin" style="width:16px;height:16px"></div><span class="lbl">${esc(markerLabel(p))}</span>`, iconSize: [16, 16] }) }).addTo(map);
-    m.bindTooltip(p.ko);
-    m.on("click", () => { if (innerWidth <= 820) return openSheet(p); const el = $("p" + p.id); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } });
-    markers[p.id] = m; pts.push([p.glat, p.glon]);
+  clusterMarkers.forEach(m => m.remove()); clusterMarkers = [];
+  if (spiderLayer) { spiderLayer.remove(); spiderLayer = null; }
+  if (map.getSize().x === 0) return;   // 숨겨진 지도에서는 위치를 계산하지 않고, 보일 때 다시 그린다
+  let open = null;
+  groupPlaces(drawnShown).forEach(g => {
+    if (g.items.length === 1) return addPlaceMarker(g.items[0].p);
+    if (spiderKey && keyOf(g) === spiderKey) { open = g; return; }
+    const cm = L.marker(map.containerPointToLatLng(L.point(g.cx, g.cy)), { icon: L.divIcon({ className: "", html: `<div class="pin cl" style="width:26px;height:26px">${g.items.length}</div>`, iconSize: [26, 26] }) }).addTo(map);
+    cm.bindTooltip(g.items.map(o => o.p.ko).slice(0, 6).join(", ") + (g.items.length > 6 ? " 외" : ""));
+    cm.on("click", () => { spiderKey = keyOf(g); layoutMarkers(); });
+    clusterMarkers.push(cm);
   });
+  if (open) drawSpider(open); else spiderKey = null;
+}
+function drawMarkers(shown) {
+  if (!map) return;
+  drawnShown = shown;
+  const pts = shown.filter(p => p.glat).map(p => [p.glat, p.glon]);
   map._pts = pts;
   if (pts.length && !map._fitted && map.getSize().x > 0) { map.fitBounds(pts, { padding: [30, 30] }); map._fitted = true; }   // 숨겨진 지도(크기 0)에서 맞추면 최대 확대가 되므로 보일 때까지 미룬다
+  layoutMarkers();
 }
+
 let sheetId = null;
 function openSheet(p) { sheetId = p.id; drawSheet(true); }
 function closeSheet() { sheetId = null; $("sheet").classList.remove("open"); $("sheetbody").innerHTML = ""; }
@@ -322,12 +418,18 @@ function drawSheet(pan) {
   }
 }
 $("sheetclose").addEventListener("click", closeSheet);
-function focusMap(p) { if (!p.glat) return toast("위치 정보가 없습니다"); setView("map"); map.setView([p.glat, p.glon], 17); markers[p.id]?.openTooltip(); }
+function focusMap(p) {
+  if (!p.glat) return toast("위치 정보가 없습니다");
+  setView("map"); map.setView([p.glat, p.glon], 17, { animate: false }); spiderKey = null; layoutMarkers();
+  const g = groupPlaces(drawnShown).find(g => g.items.some(o => o.p.id === p.id));
+  if (g && g.items.length > 1) { spiderKey = keyOf(g); layoutMarkers(); }
+  markers[p.id]?.openTooltip();
+}
 function setView(v) {
   if (v === "list") closeSheet();
   const lay = $("layout"); lay.classList.toggle("showmap", v === "map");
   document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
-  setTimeout(() => { if (!map) return; map.invalidateSize(); if (!map._fitted && map._pts && map._pts.length && map.getSize().x > 0) { map.fitBounds(map._pts, { padding: [30, 30] }); map._fitted = true; } }, 60);
+  setTimeout(() => { if (!map) return; map.invalidateSize(); if (!map._fitted && map._pts && map._pts.length && map.getSize().x > 0) { map.fitBounds(map._pts, { padding: [30, 30] }); map._fitted = true; } layoutMarkers(); }, 60);
 }
 $("mtabs").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) setView(b.dataset.v); });
 function sizeLayout() { document.documentElement.style.setProperty("--hh", ($("top").offsetHeight + $("filters").offsetHeight + (getComputedStyle($("mtabs")).display === "none" ? 0 : $("mtabs").offsetHeight)) + "px"); }
@@ -357,7 +459,8 @@ function toggleMe() {
 function initMap() {
   map = L.map("map", { zoomControl: true }).setView([38.93, 121.62], 11);
   map.on("click", () => closeSheet());
-  map.on("zoomend", updateLabels); updateLabels();
+  map.on("zoomend", () => { updateLabels(); spiderKey = null; layoutMarkers(); }); updateLabels();
+  map.on("click", () => { if (spiderKey) { spiderKey = null; layoutMarkers(); } });
   const Loc = L.Control.extend({ options: { position: "topright" }, onAdd() { const b = L.DomUtil.create("button", "locbtn"); b.textContent = "내 위치"; b.type = "button"; L.DomEvent.disableClickPropagation(b); b.addEventListener("click", toggleMe); return b; } });
   new Loc().addTo(map);
   L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", { subdomains: "1234", maxZoom: 18, minZoom: 8, attribution: "© 高德地图" }).addTo(map);
@@ -398,8 +501,13 @@ $("logform").addEventListener("submit", async e => {
   finally { btns.forEach(b => b.disabled = false); }
 });
 
-// ---------- 새 가게 추천 ----------
-let pending = [];
+// ---------- 새 가게 추천 / 이미 있는 가게에 내용 추가 ----------
+const CATS = ["훠궈", "꼬치·구이", "해산물", "한식", "중식", "일식", "뷔페", "술집·양식", "시장·마트", "간식", "기타"];   // 음식 종류 선택지(필터와 같은 이름)
+const kindTag = k => { const t = (k || "").split("(")[0].split(",")[0].trim(); return CATS.includes(t) ? t : "기타"; };
+const TILE_URL = "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}";
+let target = null, pickMap = null, pickMark = null, pickPt = null, dupTimer = null;
+const norm = s => (s || "").toLowerCase().replace(/[(（][^)）]*[)）]/g, "").replace(/[\s·\-_,.]/g, "");
+function wgsFromGcj(lat, lon) { let a = lat, b = lon; for (let i = 0; i < 3; i++) { const [x, y] = gcj(a, b); a -= x - lat; b -= y - lon; } return [a, b]; }
 async function shrink(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
   const k = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
@@ -407,65 +515,153 @@ async function shrink(file) {
   c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);   // 다시 인코딩하므로 EXIF(위치)가 지워진다
   return await new Promise(r => c.toBlob(b => r(b), "image/webp", 0.8));
 }
+$("sugform").elements["cat"].innerHTML = '<option value="">선택</option>' + CATS.map(c => `<option>${c}</option>`).join("");
+
+// 위치는 지도에서 눌러 정한다(좌표는 Amap 지도 기준으로 받아 저장할 때 GPS 좌표로 바꾼다)
+function setPick(pt) {
+  pickPt = pt;
+  if (!pickMark) pickMark = L.circleMarker(pt, { radius: 9, color: "#fff", weight: 3, fillColor: "#e8590c", fillOpacity: 1 }).addTo(pickMap);
+  else pickMark.setLatLng(pt);
+  checkDup();
+}
+function initPick(center, zoom) {
+  if (!pickMap) {
+    pickMap = L.map("pick").setView(center, zoom);
+    L.tileLayer(TILE_URL, { subdomains: "1234", maxZoom: 18, minZoom: 8 }).addTo(pickMap);
+    pickMap.on("click", e => setPick([e.latlng.lat, e.latlng.lng]));
+  } else pickMap.setView(center, zoom);
+  if (pickMark) { pickMark.remove(); pickMark = null; }
+  if (pickPt) { pickMark = L.circleMarker(pickPt, { radius: 9, color: "#fff", weight: 3, fillColor: "#e8590c", fillOpacity: 1 }).addTo(pickMap); }
+  setTimeout(() => pickMap.invalidateSize(), 60);
+}
+function setMode(mode) {   // "new": 새 가게 / "add": 이미 있는 가게에 추가
+  const f = $("sugform"), add = mode === "add";
+  $("sugnew").style.display = add ? "none" : "";
+  $("sugaddnote").style.display = add ? "" : "none";
+  f.elements["ko"].required = !add;
+  if (add) $("dup").style.display = "none";
+}
+function enterAdd(p) {
+  target = p; setMode("add");
+  $("sugtitle").textContent = `「${p.ko}」에 내용 추가`;
+  $("sugsend").textContent = editRow ? "저장" : "제출"; $("sugmsg").textContent = "";
+}
+function leaveAdd() { target = null; setMode("new"); $("sugtitle").textContent = "새 가게 추천"; checkDup(); }
+
+// 같은 가게가 이미 있는지: 이름이 같거나 비슷하거나, 표시한 위치가 40m 안이면 알려 준다
+function checkDup() {
+  const box = $("dup");
+  if (editRow || target) { box.style.display = "none"; return; }
+  const f = $("sugform"), zh = norm(f.elements["zh"].value), ko = norm(f.elements["ko"].value), hits = [];
+  PLACES.forEach(p => {
+    const d = (pickPt && p.glat) ? distM(pickPt, [p.glat, p.glon]) : Infinity, pz = norm(p.zh), pk = norm(p.ko);
+    const byName = !!((zh && pz && (zh === pz || (zh.length >= 3 && (pz.includes(zh) || zh.includes(pz))))) || (ko && pk && (ko === pk || (ko.length >= 3 && (pk.includes(ko) || ko.includes(pk))))));
+    if (byName || d <= 40) hits.push({ p, d, byName });
+  });
+  hits.sort((a, b) => (b.byName - a.byName) || (a.d - b.d));
+  if (!hits.length) { box.style.display = "none"; return; }
+  box.style.display = "";
+  box.innerHTML = `<div class="dh">이미 있는 가게인가요?</div>` + hits.slice(0, 4).map(h => `<div class="dr"><div><b>${esc(h.p.ko)}</b> <span class="by">${[h.p.kind, h.byName ? "이름이 비슷합니다" : "가까이 있습니다 " + fmtDist(h.d)].filter(Boolean).map(esc).join(" · ")}</span></div><button type="button" data-dupadd="${esc(h.p.id)}">이 가게에 추가</button></div>`).join("");
+}
+$("dup").addEventListener("click", e => { const b = e.target.closest("[data-dupadd]"); if (b) enterAdd(PLACES.find(p => p.id === b.dataset.dupadd)); });
+$("sugform").elements["zh"].addEventListener("input", () => { clearTimeout(dupTimer); dupTimer = setTimeout(checkDup, 300); });
+$("sugform").elements["ko"].addEventListener("input", () => { clearTimeout(dupTimer); dupTimer = setTimeout(checkDup, 300); });
+$("sugback").addEventListener("click", leaveAdd);
+
 $("suggest").addEventListener("click", () => {
   if (!user) { toast("로그인이 필요합니다"); return $("logdlg").showModal(); }
   if (status !== "approved") return toast(status === "pending" ? "관리자 승인 후 추천할 수 있습니다" : "추천할 수 없는 계정입니다");
-  editRow = null; keepPhotos = []; removedPhotos = []; $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "제출";
-  $("sugform").reset(); pending = []; renderPrev(); $("sugmsg").textContent = ""; $("sugdlg").showModal();
+  editRow = null; target = null; items = []; origPhotos = []; pickPt = null;
+  $("sugform").reset(); setMode("new"); $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "제출";
+  renderPrev(); $("sugmsg").textContent = ""; $("dup").style.display = "none"; $("sugdlg").showModal();
+  const c = map ? map.getCenter() : { lat: 38.93, lng: 121.62 }, z = map ? Math.max(13, Math.min(map.getZoom(), 17)) : 13;
+  initPick(myPos || [c.lat, c.lng], myPos ? 16 : z);
 });
 $("sugcancel").addEventListener("click", () => { $("sugdlg").close(); if (fromMine) { fromMine = false; openMine(); } });
 $("geo").addEventListener("click", () => {
   if (!navigator.geolocation) return toast("위치를 지원하지 않는 브라우저입니다");
-  navigator.geolocation.getCurrentPosition(p => { $("sugform").lat.value = p.coords.latitude.toFixed(6); $("sugform").lon.value = p.coords.longitude.toFixed(6); }, () => toast("위치를 가져오지 못했습니다"), { enableHighAccuracy: true, timeout: 10000 });
+  navigator.geolocation.getCurrentPosition(p => {
+    const pt = gcj(p.coords.latitude, p.coords.longitude); pickMap.setView(pt, 17); setPick(pt);
+  }, () => say("현재 위치를 가져오지 못했습니다. 지도를 눌러 표시해 주세요"), { enableHighAccuracy: true, timeout: 10000 });
 });
 function renderPrev() {
-  $("prev").innerHTML = keepPhotos.map((u, i) => `<div class="pvw"><img src="${esc(u)}" alt=""><button type="button" data-rmk="${i}">삭제</button></div>`).join("")
-    + pending.map(b => `<img src="${URL.createObjectURL(b)}" alt="">`).join("");
+  $("prev").innerHTML = items.map((it, i) => `<div class="pvw"><img src="${esc(it.url || it.src)}" alt=""><span class="ord">${i + 1}</span>
+    <div class="pb"><button type="button" data-pl="${i}"${i === 0 ? " disabled" : ""} aria-label="앞으로">‹</button><button type="button" data-pr="${i}"${i === items.length - 1 ? " disabled" : ""} aria-label="뒤로">›</button><button type="button" data-pd="${i}">삭제</button></div></div>`).join("");
 }
-$("prev").addEventListener("click", e => { const b = e.target.closest("[data-rmk]"); if (!b) return; removedPhotos.push(keepPhotos.splice(+b.dataset.rmk, 1)[0]); renderPrev(); });
+$("prev").addEventListener("click", e => {
+  const b = e.target.closest("button[data-pl],button[data-pr],button[data-pd]"); if (!b) return;
+  const move = (i, j) => { if (j >= 0 && j < items.length) [items[i], items[j]] = [items[j], items[i]]; };
+  if (b.dataset.pl != null) move(+b.dataset.pl, +b.dataset.pl - 1);
+  else if (b.dataset.pr != null) move(+b.dataset.pr, +b.dataset.pr + 1);
+  else { const [it] = items.splice(+b.dataset.pd, 1); if (it.src) URL.revokeObjectURL(it.src); }
+  renderPrev();
+});
 function openEdit(row) {
   if (!user || !row) return;
-  const f = $("sugform"); editRow = row; keepPhotos = (row.photos || []).slice(); removedPhotos = []; pending = [];
+  const f = $("sugform"); editRow = row; items = (row.photos || []).map(u => ({ url: u })); origPhotos = (row.photos || []).slice(); target = null; pickPt = null;
   f.reset();
-  ["ko", "zh", "price", "kind", "menu", "note"].forEach(k => f.elements[k].value = row[k] || "");
-  f.elements["lat"].value = row.lat ?? ""; f.elements["lon"].value = row.lon ?? "";
+  ["menu", "note", "price"].forEach(k => f.elements[k].value = row[k] || "");
+  $("sugmsg").textContent = ""; $("dup").style.display = "none"; renderPrev();
+  if (row.target_place) {   // 이미 있는 가게에 추가했던 글
+    const p = PLACES.find(x => x.id === row.target_place) || { id: row.target_place, ko: row.ko, zh: row.zh };
+    enterAdd(p); $("sugdlg").showModal(); return;
+  }
+  setMode("new");
+  ["ko", "zh"].forEach(k => f.elements[k].value = row[k] || "");
+  const m = /^(.*?)(?:\((.*)\))?$/.exec((row.kind || "").trim()), cat = kindTag(row.kind);
+  f.elements["cat"].value = CATS.includes((m && m[1] || "").trim()) ? m[1].trim() : (row.kind ? "기타" : "");
+  f.elements["detail"].value = CATS.includes((m && m[1] || "").trim()) ? (m[2] || "") : (row.kind || "");
+  if (row.lat != null && row.lon != null) pickPt = gcj(+row.lat, +row.lon);
   f.elements["ko"].dispatchEvent(new Event("input"));   // 중국어 이름을 고쳐도 한글 이름을 덮어쓰지 않게
-  $("sugtitle").textContent = "제안 수정"; $("sugsend").textContent = "저장"; $("sugmsg").textContent = "";
-  renderPrev(); $("sugdlg").showModal();
+  $("sugtitle").textContent = "제안 수정"; $("sugsend").textContent = "저장";
+  $("sugdlg").showModal(); initPick(pickPt || myPos || [38.93, 121.62], pickPt ? 17 : 13);
 }
 $("sugform").photos.addEventListener("change", async e => {
-  const files = [...e.target.files]; if (files.length > 10) toast("사진은 10장까지");
-  pending = [];
-  for (const f of files.slice(0, 10)) { try { pending.push(await shrink(f)); } catch (err) { toast("읽지 못한 사진이 있습니다"); } }
+  const files = [...e.target.files], room = 10 - items.length;
+  if (files.length > room) toast(room > 0 ? `사진은 모두 10장까지입니다. ${room}장만 추가합니다` : "사진은 모두 10장까지입니다");
+  for (const f of files.slice(0, Math.max(0, room))) { try { const blob = await shrink(f); items.push({ blob, src: URL.createObjectURL(blob) }); } catch (err) { toast("읽지 못한 사진이 있습니다"); } }
+  e.target.value = "";   // 같은 사진을 다시 고를 수 있게
   renderPrev();
 });
 $("sugform").addEventListener("submit", async e => {
   e.preventDefault();
-  if (editRow ? keepPhotos.length + pending.length === 0 : !pending.length) return say("사진을 한 장 이상 넣어 주세요");
-  if (keepPhotos.length + pending.length > 10) return say("사진은 모두 10장까지입니다");
-  const f = $("sugform"), g = k => f[k].value.trim(), btn = $("sugsend"); btn.disabled = true;
+  const f = $("sugform"), g = k => f.elements[k].value.trim(), btn = $("sugsend"), isAdd = !!target;
+  const photoCount = items.length;
+  if (photoCount > 10) return say("사진은 모두 10장까지입니다");
+  let fields;
+  if (isAdd) {
+    if (!g("menu") && !g("note") && !g("price") && !photoCount) return say("추가할 내용(추천 메뉴, 메모, 가격, 사진 중 하나)을 입력해 주세요");
+    fields = { price: g("price"), menu: g("menu"), note: g("note") };
+    if (!editRow) fields = { ...fields, ko: target.ko, zh: target.zh || "", kind: "", lat: null, lon: null, target_place: String(target.id) };
+  } else {
+    if (!g("ko")) return say("한글 이름을 입력해 주세요");
+    if (!f.elements["cat"].value) return say("음식 종류를 선택해 주세요");
+    if (!pickPt) return say("지도를 눌러 가게 위치를 표시해 주세요");
+    if (!photoCount) return say("사진을 한 장 이상 넣어 주세요");
+    const [lat, lon] = wgsFromGcj(pickPt[0], pickPt[1]), detail = g("detail");
+    fields = { ko: g("ko"), zh: g("zh"), lat: +lat.toFixed(6), lon: +lon.toFixed(6), price: g("price"), kind: detail ? `${f.elements["cat"].value}(${detail})` : f.elements["cat"].value, menu: g("menu"), note: g("note") };
+  }
+  btn.disabled = true;
   try {
-    const urls = [], stamp = Date.now();
-    for (let i = 0; i < pending.length; i++) {
+    const finalPhotos = [], stamp = Date.now();
+    for (let i = 0; i < items.length; i++) {   // 보이는 순서대로, 새 사진만 올린다
+      if (items[i].url) { finalPhotos.push(items[i].url); continue; }
       const path = `${user.id}/${stamp}-${i}.webp`;
-      const up = await sb.storage.from("photos").upload(path, pending[i], { contentType: "image/webp" });
+      const up = await sb.storage.from("photos").upload(path, items[i].blob, { contentType: "image/webp" });
       if (up.error) throw up.error;
-      urls.push(sb.storage.from("photos").getPublicUrl(path).data.publicUrl);
+      finalPhotos.push(sb.storage.from("photos").getPublicUrl(path).data.publicUrl);
     }
-    const lat = g("lat") === "" ? null : Number(g("lat")), lon = g("lon") === "" ? null : Number(g("lon"));
-    if ((lat !== null && !isFinite(lat)) || (lon !== null && !isFinite(lon))) throw new Error("위도·경도는 숫자로 입력해 주세요");
-    const fields = { ko: g("ko"), zh: g("zh"), lat, lon, price: g("price"), kind: g("kind"), menu: g("menu"), note: g("note") };
     if (editRow) {
-      const { error } = await sb.from("suggestions").update({ ...fields, photos: [...keepPhotos, ...urls] }).eq("id", editRow.id);
+      const { error } = await sb.from("suggestions").update({ ...fields, photos: finalPhotos }).eq("id", editRow.id);
       if (error) throw error;
-      const paths = removedPhotos.map(u => decodeURIComponent((u.split("/object/public/photos/")[1] || ""))).filter(x => x.startsWith(user.id + "/"));
+      const paths = origPhotos.filter(u => !finalPhotos.includes(u)).map(u => decodeURIComponent((u.split("/object/public/photos/")[1] || ""))).filter(x => x.startsWith(user.id + "/"));
       if (paths.length) sb.storage.from("photos").remove(paths);   // 지운 사진 파일도 정리(실패해도 무방)
       $("sugdlg").close(); toast("수정했습니다"); load();
       if (fromMine) { fromMine = false; openMine(); }
     } else {
-      const { error } = await sb.from("suggestions").insert({ ...fields, photos: urls });
+      const { error } = await sb.from("suggestions").insert({ ...fields, photos: finalPhotos });
       if (error) throw error;
-      $("sugdlg").close(); toast("제출했습니다. 관리자 확인 후 공개됩니다");
+      $("sugdlg").close(); toast(isAdd ? "제출했습니다. 관리자 확인 후 가게에 추가됩니다" : "제출했습니다. 관리자 확인 후 공개됩니다");
     }
   } catch (err) { say("제출하지 못했습니다: " + (err.message || err)); }
   btn.disabled = false;
@@ -523,7 +719,7 @@ async function openMine(silent) {
   const { data, error } = await sb.from("suggestions").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
   if (error) { $("mylist").textContent = "불러오지 못했습니다"; return; }
   MY = data; const ST = { pending: "승인 대기", approved: "공개 중", rejected: "거절됨" };
-  $("mylist").innerHTML = data.length ? data.map(x => `<div class="c"><div><b>${esc(x.ko)}</b><span class="tag">${ST[x.status] || x.status}</span>${x.updated_at ? ' <span class="by">수정됨</span>' : ""}</div>
+  $("mylist").innerHTML = data.length ? data.map(x => `<div class="c"><div><b>${esc(x.ko)}</b>${x.target_place ? '<span class="by"> · 가게에 추가한 내용</span>' : ""}<span class="tag">${ST[x.status] || x.status}</span>${x.updated_at ? ' <span class="by">수정됨</span>' : ""}</div>
     ${x.admin_note ? `<div class="by">관리자 메모: ${esc(x.admin_note)}</div>` : ""}<div class="by"><button type="button" data-myedit="${x.id}">수정</button> <button type="button" data-mydel="${x.id}">삭제</button></div></div>`).join("")
     : '<div class="by" style="color:var(--sub)">올린 글이 없습니다. 댓글은 각 가게의 댓글 칸에서 수정할 수 있습니다.</div>';
 }
