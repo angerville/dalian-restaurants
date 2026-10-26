@@ -187,9 +187,9 @@ async function viewAdmins(main) {
 
 // ---- 백업 ----
 async function backup() {
-  const [p, c, s, a] = await Promise.all([sb.from("profiles").select("*"), sb.from("comments").select("*"), sb.from("suggestions").select("*"), sb.from("admins").select("*")]);
-  const err = [p, c, s, a].find(x => x.error); if (err) return toast("백업 실패: " + err.error.message);
-  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), profiles: p.data, admins: a.data, comments: c.data, suggestions: s.data }, null, 1)], { type: "application/json" });
+  const [p, c, s, a, e] = await Promise.all([sb.from("profiles").select("*"), sb.from("comments").select("*"), sb.from("suggestions").select("*"), sb.from("admins").select("*"), sb.from("place_edits").select("*")]);
+  const err = [p, c, s, a, e].find(x => x.error); if (err) return toast("백업 실패: " + err.error.message);
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), profiles: p.data, admins: a.data, comments: c.data, suggestions: s.data, place_edits: e.data }, null, 1)], { type: "application/json" });
   const el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = `backup_${new Date().toISOString().slice(0, 10)}.json`; el.click();
   toast("백업 파일 내보냄");
 }

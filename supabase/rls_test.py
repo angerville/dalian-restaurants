@@ -179,6 +179,22 @@ def run():
         r = requests.delete(rest(f"suggestions?id=eq.{aid}"), headers=hdr(tu, prefer))
         T.check("본인이 추가한 내용을 삭제", r.status_code == 200 and bool(r.json()), r.text[:120])
 
+    print("== 기본 가게 수정(place_edits)")
+    T.check("방문자도 고친 내용을 읽을 수 있음", requests.get(rest("place_edits?select=place_id"), headers=hdr()).status_code == 200)
+    r = requests.post(rest("place_edits"), headers=hdr(tu, {"Prefer": "return=representation,resolution=merge-duplicates"}), json={"place_id": "999", "note": "일반 사용자가 고침"})
+    T.check("승인된 일반 사용자는 기본 가게를 고칠 수 없음", denied(r), r.text[:120])
+    r = requests.post(rest("place_edits"), headers=hdr(extra={"Prefer": "return=representation"}), json={"place_id": "999", "note": "방문자가 고침"})
+    T.check("방문자는 기본 가게를 고칠 수 없음", denied(r), r.text[:120])
+    r = requests.post(rest("place_edits?on_conflict=place_id"), headers=hdr(ta, {"Prefer": "return=representation,resolution=merge-duplicates"}), json={"place_id": "999", "note": "관리자가 고침", "photos": ["1-2.webp", "1-1.webp"]})
+    row = r.json()[0] if r.status_code in (200, 201) and r.json() else {}
+    T.check("관리자는 기본 가게를 고칠 수 있음", row.get("note") == "관리자가 고침" and row.get("photos") == ["1-2.webp", "1-1.webp"], r.text[:200])
+    seen = requests.get(rest("place_edits?place_id=eq.999&select=note,updated_by"), headers=hdr()).json()
+    T.check("고친 내용은 방문자에게 보임", len(seen) == 1 and seen[0]["note"] == "관리자가 고침", str(seen))
+    r = requests.patch(rest("place_edits?place_id=eq.999"), headers=hdr(tu, prefer), json={"note": "일반 사용자가 덮어씀"})
+    T.check("일반 사용자는 고친 내용을 덮어쓸 수 없음", denied(r), r.text[:120])
+    r = requests.delete(rest("place_edits?place_id=eq.999"), headers=hdr(ta, prefer))
+    T.check("관리자는 고친 내용을 지울 수 있음(시험 데이터 정리)", r.status_code == 200 and bool(r.json()), r.text[:120])
+
     print("== 사진 저장소")
     sp = {"apikey": ANON, "Authorization": "Bearer " + tu}
     tiny = b"RIFF\x1a\x00\x00\x00WEBPVP8L\x0d\x00\x00\x00/\x00\x00\x00\x10\x07\x10\x11\x11\x88\x88\xfe\x07\x00"

@@ -212,3 +212,35 @@ create policy suggestions_update_own on public.suggestions for update to authent
 drop policy if exists suggestions_delete on public.suggestions;
 create policy suggestions_delete on public.suggestions for delete to authenticated
   using (public.is_admin() or user_id = auth.uid());
+
+------------------------------------------------------------------ 기본 가게 수정(관리자가 고친 내용을 기본 데이터 위에 덮어쓴다)
+-- 기본 가게(data/restaurants.json)의 글·사진·위치를 사이트에서 고치면 여기에 저장된다. 비어 있는(null) 항목은 원래 값을 쓴다.
+create table if not exists public.place_edits (
+  place_id   text primary key check (char_length(place_id) <= 40),
+  ko         text check (ko is null or char_length(ko) between 1 and 100),
+  zh         text check (zh is null or char_length(zh) <= 200),
+  kind       text check (kind is null or char_length(kind) <= 60),
+  price      text check (price is null or char_length(price) <= 40),
+  menu       text check (menu is null or char_length(menu) <= 300),
+  note       text check (note is null or char_length(note) <= 1500),
+  photos     text[] check (photos is null or coalesce(array_length(photos, 1), 0) <= 30),
+  lat        numeric,
+  lon        numeric,
+  updated_by uuid default auth.uid(),
+  updated_at timestamptz not null default now()
+);
+alter table public.place_edits enable row level security;
+drop policy if exists place_edits_select on public.place_edits;
+create policy place_edits_select on public.place_edits for select to anon, authenticated using (true);
+drop policy if exists place_edits_write on public.place_edits;
+create policy place_edits_write on public.place_edits for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.touch_place_edit() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now(); new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+drop trigger if exists place_edits_touch on public.place_edits;
+create trigger place_edits_touch before insert or update on public.place_edits for each row execute function public.touch_place_edit();

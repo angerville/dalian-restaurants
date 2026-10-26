@@ -102,6 +102,9 @@ select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius
 .add .by button{border:0;padding:0 4px;font-size:12px;color:var(--sub);background:none}
 .aph{display:flex;gap:6px;overflow-x:auto;margin-top:6px}
 .aph img{width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;flex:none}
+form.guide{width:min(560px,92vw)}
+.guide h3{font-size:14px;margin:12px 0 4px}
+.guide ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px}
 .locbtn{background:#fff;border:2px solid rgba(0,0,0,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
 .locbtn.on{background:#2563eb;color:#fff;border-color:#2563eb}
 .pin{background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
@@ -122,6 +125,7 @@ select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius
   <h1>대련 맛집 지도</h1>
   <input type="text" id="q" placeholder="이름·메뉴 검색">
   <span class="spacer"></span>
+  <button id="guidebtn">안내</button>
   <button id="suggest">새 가게 추천</button>
   <button id="mine" style="display:none">내 글</button>
   <span class="who" id="who"></span>
@@ -132,6 +136,12 @@ select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius
 <div class="layout" id="layout"><div id="list"></div><div id="map"></div></div>
 
 <dialog id="pic" class="pic"><img id="picimg" alt=""></dialog>
+
+<dialog id="guidedlg"><form class="dlg guide" id="guideform">
+  <h2 id="guidetitle"></h2>
+  <div id="guidebody"></div>
+  <div class="actions"><button type="submit" class="on" id="guideok">확인했습니다</button></div>
+</form></dialog>
 
 <dialog id="logdlg"><form class="dlg" id="logform">
   <h2>로그인</h2>
@@ -181,9 +191,11 @@ const say = t => { const m = document.querySelector("dialog[open] .msg"); if (m)
 const toast = t => { const el = $("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); };
 const PRICE_BANDS = [["~60", 0, 60], ["60~100", 60, 100], ["100~150", 100, 150], ["150~", 150, 1e9]];
 
-let PLACES = [], COMMENTS = {}, ADDS = {}, map, markers = {}, user = null, status = "";
+let PLACES = [], COMMENTS = {}, ADDS = {}, EDITS = {}, admin = false, map, markers = {}, user = null, status = "";
 const F = { q: "", tag: new Set(), region: new Set(), price: new Set(), near: false };
 const openComments = new Set();
+let editBase = null, baseOrig = null, kindTouched = false, pickMoved = false;
+const maxPhotos = () => editBase ? 30 : 10;   // 선생님이 올리는 글은 10장, 관리자가 고치는 기본 가게는 30장까지
 let editingC = null, editRow = null, items = [], origPhotos = [], fromMine = false;   // items: 사진 목록(기존 {url}, 새로 고른 {blob, src}) — 순서가 곧 보이는 순서
 
 // ---------- 데이터 ----------
@@ -192,10 +204,13 @@ async function load() {
   render();
   if (!sb) return;
   try {
-    const [s, c] = await Promise.all([
+    const [s, c, pe] = await Promise.all([
       sb.from("suggestions").select("*").eq("status", "approved").order("created_at"),
       sb.from("comments").select("*").eq("hidden", false).order("created_at"),
+      sb.from("place_edits").select("*"),
     ]);
+    EDITS = {}; (pe.data || []).forEach(x => EDITS[x.place_id] = x);
+    applyEdits(PLACES);
     if (s.data) {
       PLACES = PLACES.concat(s.data.filter(x => !x.target_place).map(toPlace));
       ADDS = {}; s.data.filter(x => x.target_place).forEach(x => (ADDS[x.target_place] ||= []).push(x));   // 이미 있는 가게에 덧붙인 내용
@@ -205,6 +220,16 @@ async function load() {
     if (s.error || c.error) toast("댓글을 불러오지 못했습니다");
   } catch (e) { toast("댓글을 불러오지 못했습니다"); }
   render();
+}
+function applyEdits(list) {
+  list.forEach(p => {
+    const e = EDITS[p.id]; if (!e) return;
+    ["ko", "zh", "kind", "price", "menu", "note"].forEach(k => { if (e[k] != null) p[k] = e[k]; });
+    if (e.kind != null) p.tags = [kindTag(e.kind)];
+    if (e.price != null) { const m = (e.price || "").match(/\d+/); p.priceMin = m ? +m[0] : null; }
+    if (e.photos != null) p.photos = e.photos;
+    if (e.lat != null && e.lon != null) { p.lat = +e.lat; p.lon = +e.lon; const g = gcj(+e.lat, +e.lon); p.glat = g[0]; p.glon = g[1]; }
+  });
 }
 function toPlace(s) {
   const m = (s.price || "").match(/\d+/), tags = [kindTag(s.kind)];
@@ -221,7 +246,7 @@ function gcj(lat, lon) {
   dl = dl * 180 / ((a * (1 - ee)) / (m * sm) * Math.PI); dn = dn * 180 / (a / sm * Math.cos(rl) * Math.PI);
   return [lat + dl, lon + dn];
 }
-const photoUrl = (p, x) => x.url ? p : "photos/" + p;
+const photoUrl = (p, x) => (x.url || /^https?:/.test(p)) ? p : "photos/" + p;   // 업로드한 사진은 전체 주소, 기본 사진은 파일 이름
 
 // ---------- 필터 ----------
 function matches(p) {
@@ -265,8 +290,8 @@ function card(p) {
       ${p.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(p.menu)}</div>` : ""}
       ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
       ${p.by ? `<div class="meta">추천 ${esc(p.by)}</div>` : ""}
-      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && a.user_id === user.id && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
-      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && p.uid === user.id && status === "approved") ? "<button data-edits>수정</button>" : ""}</div>
+      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
+      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}</div>
       ${open ? `<div class="cm">${cs.map(c => c.id === editingC
       ? `<div class="c"><form data-ec="${c.id}" style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" required>${esc(c.body)}</textarea><div class="actions"><button type="button" data-cancelc>취소</button><button type="submit" class="on">저장</button></div></form></div>`
       : `<div class="c"><div>${esc(c.body)}</div><div class="by">${esc(c.author_name || "")} · ${new Date(c.created_at).toLocaleDateString("ko-KR")}${c.updated_at ? " · 수정됨" : ""}${user && c.user_id === user.id ? `${status === "approved" ? ` <button data-editc="${c.id}">수정</button>` : ""} <button data-delc="${c.id}">삭제</button>` : ""}</div></div>`).join("") || '<div class="by" style="color:var(--sub)">아직 댓글이 없습니다</div>'}
@@ -291,6 +316,7 @@ function card(p) {
     editingC = null; toast("수정했습니다"); load();
   }));
   el.querySelector("[data-edits]")?.addEventListener("click", () => openEdit(p.raw));
+  el.querySelector("[data-editbase]")?.addEventListener("click", () => openEditBase(p));
   el.querySelectorAll("[data-editadd]").forEach(b => b.addEventListener("click", () => openEdit((ADDS[p.id] || []).find(a => String(a.id) === b.dataset.editadd))));
   setupGallery(el, p);
   const cf = el.querySelector("[data-cf]");
@@ -469,11 +495,12 @@ function initMap() {
 // ---------- 로그인 ----------
 async function refreshUser() {
   if (!sb) return;
-  const { data } = await sb.auth.getSession(); user = data.session?.user || null; status = "";
-  if (user) { const p = await sb.from("profiles").select("status,display_name").eq("user_id", user.id).maybeSingle(); status = p.data?.status || ""; $("who").textContent = (p.data?.display_name || user.email) + (status === "pending" ? " · 승인 대기" : ""); }
+  const { data } = await sb.auth.getSession(); user = data.session?.user || null; status = ""; admin = false;
+  if (user) { const p = await sb.from("profiles").select("status,display_name").eq("user_id", user.id).maybeSingle(); status = p.data?.status || ""; admin = (await sb.rpc("is_admin")).data === true; $("who").textContent = (p.data?.display_name || user.email) + (status === "pending" ? " · 승인 대기" : ""); }
   else $("who").textContent = "";
   $("login").textContent = user ? "로그아웃" : "로그인";
   $("mine").style.display = (user && status === "approved") ? "" : "none";
+  $("who").title = admin ? "관리자" : "";
   render();
 }
 $("login").addEventListener("click", async () => { if (user) { await sb.auth.signOut(); toast("로그아웃"); return refreshUser(); } $("logdlg").showModal(); });
@@ -519,7 +546,7 @@ $("sugform").elements["cat"].innerHTML = '<option value="">선택</option>' + CA
 
 // 위치는 지도에서 눌러 정한다(좌표는 Amap 지도 기준으로 받아 저장할 때 GPS 좌표로 바꾼다)
 function setPick(pt) {
-  pickPt = pt;
+  pickPt = pt; pickMoved = true;
   if (!pickMark) pickMark = L.circleMarker(pt, { radius: 9, color: "#fff", weight: 3, fillColor: "#e8590c", fillOpacity: 1 }).addTo(pickMap);
   else pickMark.setLatLng(pt);
   checkDup();
@@ -571,7 +598,7 @@ $("sugback").addEventListener("click", leaveAdd);
 $("suggest").addEventListener("click", () => {
   if (!user) { toast("로그인이 필요합니다"); return $("logdlg").showModal(); }
   if (status !== "approved") return toast(status === "pending" ? "관리자 승인 후 추천할 수 있습니다" : "추천할 수 없는 계정입니다");
-  editRow = null; target = null; items = []; origPhotos = []; pickPt = null;
+  editRow = null; editBase = null; target = null; items = []; origPhotos = []; pickPt = null; kindTouched = false; pickMoved = false;
   $("sugform").reset(); setMode("new"); $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "제출";
   renderPrev(); $("sugmsg").textContent = ""; $("dup").style.display = "none"; $("sugdlg").showModal();
   const c = map ? map.getCenter() : { lat: 38.93, lng: 121.62 }, z = map ? Math.max(13, Math.min(map.getZoom(), 17)) : 13;
@@ -598,7 +625,7 @@ $("prev").addEventListener("click", e => {
 });
 function openEdit(row) {
   if (!user || !row) return;
-  const f = $("sugform"); editRow = row; items = (row.photos || []).map(u => ({ url: u })); origPhotos = (row.photos || []).slice(); target = null; pickPt = null;
+  const f = $("sugform"); editBase = null; kindTouched = false; pickMoved = false; editRow = row; items = (row.photos || []).map(u => ({ url: u })); origPhotos = (row.photos || []).slice(); target = null; pickPt = null;
   f.reset();
   ["menu", "note", "price"].forEach(k => f.elements[k].value = row[k] || "");
   $("sugmsg").textContent = ""; $("dup").style.display = "none"; renderPrev();
@@ -616,9 +643,27 @@ function openEdit(row) {
   $("sugtitle").textContent = "제안 수정"; $("sugsend").textContent = "저장";
   $("sugdlg").showModal(); initPick(pickPt || myPos || [38.93, 121.62], pickPt ? 17 : 13);
 }
+function parseKind(f, kind) {
+  const m = /^(.*?)(?:\((.*)\))?$/.exec((kind || "").trim()), head = (m && m[1] || "").trim(), ok = CATS.includes(head);
+  f.elements["cat"].value = ok ? head : (kind ? "기타" : "");
+  f.elements["detail"].value = ok ? (m[2] || "") : (kind || "");
+}
+["cat", "detail"].forEach(k => $("sugform").elements[k].addEventListener("input", () => { kindTouched = true; }));
+function openEditBase(p) {   // 처음 올린 가게(기본 데이터)를 관리자가 고친다. 고친 내용은 place_edits에 저장되어 기본 데이터 위에 덮어쓴다
+  if (!user || !admin) return;
+  const f = $("sugform"); editRow = null; editBase = p.id; baseOrig = p; target = null; kindTouched = false; pickMoved = false;
+  items = p.photos.map(k => ({ url: photoUrl(k, p), key: k })); origPhotos = p.photos.filter(k => /^https?:/.test(k));
+  f.reset(); setMode("new");
+  ["menu", "note", "price", "ko", "zh"].forEach(k => f.elements[k].value = p[k] || "");
+  parseKind(f, p.kind);
+  pickPt = gcj(+p.lat, +p.lon);
+  f.elements["ko"].dispatchEvent(new Event("input"));
+  $("sugtitle").textContent = "가게 정보 수정"; $("sugsend").textContent = "저장"; $("sugmsg").textContent = ""; $("dup").style.display = "none";
+  renderPrev(); $("sugdlg").showModal(); initPick(pickPt, 17);
+}
 $("sugform").photos.addEventListener("change", async e => {
-  const files = [...e.target.files], room = 10 - items.length;
-  if (files.length > room) toast(room > 0 ? `사진은 모두 10장까지입니다. ${room}장만 추가합니다` : "사진은 모두 10장까지입니다");
+  const files = [...e.target.files], room = maxPhotos() - items.length;
+  if (files.length > room) toast(room > 0 ? `사진은 모두 ${maxPhotos()}장까지입니다. ${room}장만 추가합니다` : `사진은 모두 ${maxPhotos()}장까지입니다`);
   for (const f of files.slice(0, Math.max(0, room))) { try { const blob = await shrink(f); items.push({ blob, src: URL.createObjectURL(blob) }); } catch (err) { toast("읽지 못한 사진이 있습니다"); } }
   e.target.value = "";   // 같은 사진을 다시 고를 수 있게
   renderPrev();
@@ -627,7 +672,7 @@ $("sugform").addEventListener("submit", async e => {
   e.preventDefault();
   const f = $("sugform"), g = k => f.elements[k].value.trim(), btn = $("sugsend"), isAdd = !!target;
   const photoCount = items.length;
-  if (photoCount > 10) return say("사진은 모두 10장까지입니다");
+  if (photoCount > maxPhotos()) return say(`사진은 모두 ${maxPhotos()}장까지입니다`);
   let fields;
   if (isAdd) {
     if (!g("menu") && !g("note") && !g("price") && !photoCount) return say("추가할 내용(추천 메뉴, 메모, 가격, 사진 중 하나)을 입력해 주세요");
@@ -635,8 +680,8 @@ $("sugform").addEventListener("submit", async e => {
     if (!editRow) fields = { ...fields, ko: target.ko, zh: target.zh || "", kind: "", lat: null, lon: null, target_place: String(target.id) };
   } else {
     if (!g("ko")) return say("한글 이름을 입력해 주세요");
-    if (!f.elements["cat"].value) return say("음식 종류를 선택해 주세요");
-    if (!pickPt) return say("지도를 눌러 가게 위치를 표시해 주세요");
+    if (!editBase && !f.elements["cat"].value) return say("음식 종류를 선택해 주세요");
+    if (!editBase && !pickPt) return say("지도를 눌러 가게 위치를 표시해 주세요");
     if (!photoCount) return say("사진을 한 장 이상 넣어 주세요");
     const [lat, lon] = wgsFromGcj(pickPt[0], pickPt[1]), detail = g("detail");
     fields = { ko: g("ko"), zh: g("zh"), lat: +lat.toFixed(6), lon: +lon.toFixed(6), price: g("price"), kind: detail ? `${f.elements["cat"].value}(${detail})` : f.elements["cat"].value, menu: g("menu"), note: g("note") };
@@ -645,16 +690,30 @@ $("sugform").addEventListener("submit", async e => {
   try {
     const finalPhotos = [], stamp = Date.now();
     for (let i = 0; i < items.length; i++) {   // 보이는 순서대로, 새 사진만 올린다
-      if (items[i].url) { finalPhotos.push(items[i].url); continue; }
+      if (items[i].url) { finalPhotos.push(items[i].key ?? items[i].url); continue; }
       const path = `${user.id}/${stamp}-${i}.webp`;
       const up = await sb.storage.from("photos").upload(path, items[i].blob, { contentType: "image/webp" });
       if (up.error) throw up.error;
       finalPhotos.push(sb.storage.from("photos").getPublicUrl(path).data.publicUrl);
     }
-    if (editRow) {
+    if (editBase) {
+      const o = baseOrig, ch = {}, prev = EDITS[editBase] || {};
+      ["ko", "zh", "price", "menu", "note"].forEach(k => { if (fields[k] !== (o[k] || "")) ch[k] = fields[k]; });
+      if (kindTouched && fields.kind !== (o.kind || "")) ch.kind = fields.kind;
+      if (pickMoved) { ch.lat = fields.lat; ch.lon = fields.lon; }
+      if (JSON.stringify(finalPhotos) !== JSON.stringify(o.photos)) ch.photos = finalPhotos;
+      if (!Object.keys(ch).length) { $("sugdlg").close(); toast("바뀐 내용이 없습니다"); btn.disabled = false; return; }
+      const row = { place_id: editBase };
+      ["ko", "zh", "kind", "price", "menu", "note", "photos", "lat", "lon"].forEach(k => { const v = k in ch ? ch[k] : prev[k]; if (v != null) row[k] = v; });
+      const { error } = await sb.from("place_edits").upsert(row, { onConflict: "place_id" });
+      if (error) throw error;
+      const paths = origPhotos.filter(u => !finalPhotos.includes(u)).map(u => decodeURIComponent((u.split("/object/public/photos/")[1] || ""))).filter(Boolean);
+      if (paths.length) sb.storage.from("photos").remove(paths);
+      $("sugdlg").close(); toast("수정했습니다"); load();
+    } else if (editRow) {
       const { error } = await sb.from("suggestions").update({ ...fields, photos: finalPhotos }).eq("id", editRow.id);
       if (error) throw error;
-      const paths = origPhotos.filter(u => !finalPhotos.includes(u)).map(u => decodeURIComponent((u.split("/object/public/photos/")[1] || ""))).filter(x => x.startsWith(user.id + "/"));
+      const paths = origPhotos.filter(u => !finalPhotos.includes(u)).map(u => decodeURIComponent((u.split("/object/public/photos/")[1] || ""))).filter(x => x && (admin || x.startsWith(user.id + "/")));
       if (paths.length) sb.storage.from("photos").remove(paths);   // 지운 사진 파일도 정리(실패해도 무방)
       $("sugdlg").close(); toast("수정했습니다"); load();
       if (fromMine) { fromMine = false; openMine(); }
@@ -738,7 +797,19 @@ $("mylist").addEventListener("click", async e => {
     toast("삭제했습니다"); openMine(true); load();
   }
 });
-initMap(); load(); refreshUser();
+// ---------- 첫 방문 안내(내용은 data/guide.json) ----------
+let GUIDE = null;
+async function initGuide() {
+  try { GUIDE = await (await fetch("data/guide.json", { cache: "no-cache" })).json(); } catch (e) { return; }
+  $("guidetitle").textContent = GUIDE.title || "안내";
+  $("guidebody").innerHTML = (GUIDE.sections || []).map(x => `<h3>${esc(x.h)}</h3><ul>${(x.items || []).map(t => `<li>${esc(t)}</li>`).join("")}</ul>`).join("");
+  let seen = null; try { seen = localStorage.getItem("guide_seen"); } catch (e) {}
+  if (String(seen) !== String(GUIDE.version)) { $("guidedlg").showModal(); try { localStorage.setItem("guide_seen", String(GUIDE.version)); } catch (e) {} }   // 한 번 보여 주면 본 것으로 기록
+}
+$("guideform").addEventListener("submit", e => { e.preventDefault(); $("guidedlg").close(); });   // 닫기 이벤트가 늦어도 되도록 보여 줄 때 이미 기록한다
+$("guidedlg").addEventListener("close", () => { try { if (GUIDE) localStorage.setItem("guide_seen", String(GUIDE.version)); } catch (e) {} });
+$("guidebtn").addEventListener("click", () => { if (GUIDE) $("guidedlg").showModal(); });
+initMap(); load(); refreshUser(); initGuide();
 if (sb) sb.auth.onAuthStateChange(() => { setTimeout(refreshUser, 0); });  // 콜백 안에서 Supabase 함수를 기다리면 교착이 생기므로 밖으로 뺀다
 </script>
 </body>
