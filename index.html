@@ -330,7 +330,7 @@ function card(p) {
       <div class="meta">${[p.kind, p.price ? "인당 ¥" + p.price : "", p.region, (myPos && p.glat) ? "내 위치에서 " + fmtDist(distM(myPos, [p.glat, p.glon])) : ""].filter(Boolean).map(esc).join(" · ")}</div>
       ${p.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(p.menu)}</div>` : ""}
       ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
-      ${p.by ? `<div class="meta">추천 ${esc(p.by)}</div>` : ""}
+      ${(p.by || p.author) ? `<div class="meta">작성 ${esc(p.by || p.author)}</div>` : ""}
       ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
       <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}</div>
       ${open ? `<div class="cm">${cs.map(c => c.id === editingC
