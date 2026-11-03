@@ -23,6 +23,7 @@ header.top h1{font-size:18px;margin:0 6px 0 0}
 #q{flex:1;min-width:160px;max-width:320px}
 .spacer{flex:1}
 .who{font-size:13px;color:var(--sub)}
+.toplogin{display:none}
 .filters{padding:8px 16px;border-bottom:1px solid var(--line);display:grid;gap:6px;background:var(--bg)}
 .fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .fr .lab{font-size:12px;color:var(--sub);width:34px}
@@ -151,6 +152,8 @@ form.guide{width:min(560px,92vw)}
   .spacer{display:none}
   #q{max-width:none;min-width:0;flex:1;background:#fff;border:0;border-radius:999px;padding:11px 18px;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
   .menubtn{display:block;background:#fff;border:0;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.3);padding:11px 16px;font-size:15px}
+  .toplogin{display:block;background:var(--accent);color:#fff;border:0;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.3);padding:11px 14px;font-size:14px;font-weight:600}
+  .toplogin.off{display:none}
   .menupanel{display:none;position:absolute;right:10px;top:58px;background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.3);padding:10px;flex-direction:column;gap:8px;min-width:150px}
   .menupanel.open{display:flex}
   .menupanel button{width:100%;text-align:left}
@@ -181,6 +184,7 @@ form.guide{width:min(560px,92vw)}
   <h1>대련 맛집 지도</h1>
   <input type="text" id="q" placeholder="이름·메뉴 검색">
   <span class="spacer"></span>
+  <button id="toplogin" class="toplogin" type="button">로그인·가입</button>
   <button id="menubtn" class="menubtn" type="button">메뉴</button>
   <div class="menupanel" id="menupanel">
     <button id="guidebtn">안내</button>
@@ -247,7 +251,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-163052";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-163533";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -670,6 +674,7 @@ sbody.addEventListener("touchmove", e => {
 const tEnd = () => { if (tg && tg.engaged && drag) dragEnd(drag.ly); tg = null; };
 sbody.addEventListener("touchend", tEnd); sbody.addEventListener("touchcancel", tEnd);
 // 메뉴(안내·새 가게 추천·내 글·로그인)는 버튼을 누르면 펼쳐진다
+$("toplogin").addEventListener("click", () => openLogin("in"));
 $("menubtn").addEventListener("click", e => { e.stopPropagation(); $("menupanel").classList.toggle("open"); });
 $("menupanel").addEventListener("click", e => { if (e.target.closest("button")) $("menupanel").classList.remove("open"); });
 document.addEventListener("click", e => { if (!e.target.closest("#menupanel") && !e.target.closest("#menubtn")) $("menupanel").classList.remove("open"); });
@@ -748,6 +753,7 @@ async function refreshUser() {
   MYLIKES = new Set();   // 내가 누른 맛있어요
   if (user) { const lk = await sb.from("likes").select("place_id").eq("user_id", user.id); (lk.data || []).forEach(x => MYLIKES.add(x.place_id)); }
   $("login").textContent = user ? "로그아웃" : "로그인";
+  $("toplogin").classList.toggle("off", !!user);   // 폰: 로그인하지 않았을 때만 위쪽에 바로 보인다
   $("mine").style.display = (user && status === "approved") ? "" : "none";
   $("adminbtn").style.display = admin ? "" : "none";
   if (admin) {   // 가입 승인을 기다리는 사람 수를 버튼에 표시
