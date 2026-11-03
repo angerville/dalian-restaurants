@@ -270,6 +270,15 @@ async function load() {
   } catch (e) { toast("댓글을 불러오지 못했습니다"); }
   render();
 }
+async function deleteSuggestion(row) {   // 본인이 올린 가게 글(새 가게 또는 추가한 내용)을 지운다. 올린 사진 파일도 정리한다
+  if (!row || !user) return;
+  const { error } = await sb.from("suggestions").delete().eq("id", row.id);
+  if (error) return toast("삭제하지 못했습니다: " + error.message);
+  const paths = (row.photos || []).map(u => decodeURIComponent((u.split("/object/public/photos/")[1] || ""))).filter(x => x && x.startsWith(user.id + "/"));
+  if (paths.length) sb.storage.from("photos").remove(paths);
+  if (sheetId === "s" + row.id) closeSheet();
+  toast("삭제했습니다"); load();
+}
 function applyEdits(list) {
   list.forEach(p => {
     const e = EDITS[p.id]; if (!e) return;
@@ -342,8 +351,8 @@ function card(p) {
       ${p.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(p.menu)}</div>` : ""}
       ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
       ${(p.by || p.author) ? `<div class="meta">작성 ${esc(p.by || p.author)}</div>` : ""}
-      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
-      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}</div>
+      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}${user && a.user_id === user.id ? ` <button type="button" data-deladd="${a.id}">삭제</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
+      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}${(p.url && user && p.uid === user.id) ? "<button data-delp>삭제</button>" : ""}</div>
       ${open ? `<div class="cm">${cs.map(c => c.id === editingC
       ? `<div class="c"><form data-ec="${c.id}" style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" required>${esc(c.body)}</textarea><div class="actions"><button type="button" data-cancelc>취소</button><button type="submit" class="on">저장</button></div></form></div>`
       : `<div class="c"><div>${esc(c.body)}</div><div class="by">${esc(c.author_name || "")} · ${new Date(c.created_at).toLocaleDateString("ko-KR")}${c.updated_at ? " · 수정됨" : ""}${user && c.user_id === user.id ? `${status === "approved" ? ` <button data-editc="${c.id}">수정</button>` : ""} <button data-delc="${c.id}">삭제</button>` : ""}</div></div>`).join("") || '<div class="by" style="color:var(--sub)">아직 댓글이 없습니다</div>'}
@@ -369,6 +378,14 @@ function card(p) {
   }));
   el.querySelector("[data-edits]")?.addEventListener("click", () => openEdit(p.raw));
   el.querySelector("[data-editbase]")?.addEventListener("click", () => openEditBase(p));
+  el.querySelector("[data-delp]")?.addEventListener("click", async e => {
+    const b = e.currentTarget; if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "삭제 확인"; return; }
+    await deleteSuggestion(p.raw);
+  });
+  el.querySelectorAll("[data-deladd]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "삭제 확인"; return; }
+    await deleteSuggestion((ADDS[p.id] || []).find(a => String(a.id) === b.dataset.deladd));
+  }));
   el.querySelectorAll("[data-editadd]").forEach(b => b.addEventListener("click", () => openEdit((ADDS[p.id] || []).find(a => String(a.id) === b.dataset.editadd))));
   setupGallery(el, p);
   const cf = el.querySelector("[data-cf]");
@@ -718,7 +735,7 @@ function leaveAdd() { target = null; setMode("new"); $("sugtitle").textContent =
 // 같은 가게가 이미 있는지: 이름이 같거나 비슷하거나, 표시한 위치가 40m 안이면 알려 준다
 function checkDup() {
   const box = $("dup");
-  if (editRow || target) { box.style.display = "none"; return; }
+  if (editRow || editBase || target) { box.style.display = "none"; return; }
   const f = $("sugform"), zh = norm(f.elements["zh"].value), ko = norm(f.elements["ko"].value), hits = [];
   PLACES.forEach(p => {
     const d = (pickPt && p.glat) ? distM(pickPt, [p.glat, p.glon]) : Infinity, pz = norm(p.zh), pk = norm(p.ko);
@@ -782,6 +799,7 @@ function openEdit(row) {
   if (row.lat != null && row.lon != null) pickPt = gcj(+row.lat, +row.lon);
   f.elements["ko"].dispatchEvent(new Event("input"));   // 중국어 이름을 고쳐도 한글 이름을 덮어쓰지 않게
   $("sugtitle").textContent = "제안 수정"; $("sugsend").textContent = "저장";
+  $("amapbox").style.display = APP_CONFIG.AMAP_JS_KEY ? "" : "none"; $("amapq").value = ""; $("amapres").innerHTML = "";
   $("sugdlg").showModal(); initPick(pickPt || myPos || [38.93, 121.62], pickPt ? 17 : 13);
 }
 // ---------- Amap 검색: 가게 이름을 치면 Amap에서 찾아 중국어 이름·위치·종류를 채운다 ----------
@@ -876,6 +894,7 @@ function openEditBase(p) {   // 처음 올린 가게(기본 데이터)를 관리
   pickPt = gcj(+p.lat, +p.lon);
   f.elements["ko"].dispatchEvent(new Event("input"));
   $("sugtitle").textContent = "가게 정보 수정"; $("sugsend").textContent = "저장"; $("sugmsg").textContent = ""; $("dup").style.display = "none";
+  $("amapbox").style.display = APP_CONFIG.AMAP_JS_KEY ? "" : "none"; $("amapq").value = ""; $("amapres").innerHTML = "";
   renderPrev(); $("sugdlg").showModal(); initPick(pickPt, 17);
 }
 $("sugform").photos.addEventListener("change", async e => {
