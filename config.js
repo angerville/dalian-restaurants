@@ -2,7 +2,7 @@
 window.APP_CONFIG = {
   SUPABASE_URL: "https://hrafdnxqrazsnlfggcpw.supabase.co",
   // 고덕지도(Amap) 웹 JS API 키 — 새 가게 추천의 "Amap에서 가게 찾기"에 쓴다. 공개되어도 되는 키이며, 도메인(angerville.github.io)으로 제한하세요.
-  AMAP_JS_KEY: "",
-  AMAP_JS_SECURITY: "",
+  AMAP_JS_KEY: "a688ee0133765ed1cba50e3c836d1ff2",
+  AMAP_JS_SECURITY: "3d1f39a37a1fa4e70f099367cd9a270c",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyYWZkbnhxcmF6c25sZmdnY3B3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2NTA2NDMsImV4cCI6MjEwODIyNjY0M30.PX8Szft2QM8EC6Az4VffrUnV6pYaiJB771IdW6v_3is",
 };

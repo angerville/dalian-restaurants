@@ -684,11 +684,12 @@ async function shrink(file) {
 $("sugform").elements["cat"].innerHTML = '<option value="">선택</option>' + CATS.map(c => `<option>${c}</option>`).join("");
 
 // 위치는 지도에서 눌러 정한다(좌표는 Amap 지도 기준으로 받아 저장할 때 GPS 좌표로 바꾼다)
-function setPick(pt) {
+function setPick(pt, fromSearch) {
   pickPt = pt; pickMoved = true;
   if (!pickMark) pickMark = L.circleMarker(pt, { radius: 9, color: "#fff", weight: 3, fillColor: "#e8590c", fillOpacity: 1 }).addTo(pickMap);
   else pickMark.setLatLng(pt);
   checkDup();
+  if (!fromSearch && !target) nearbyAmap(pt);   // 위치를 찍으면 그 근처 Amap 가게를 보여 준다(한글만 아는 사람도 고를 수 있게)
 }
 function initPick(center, zoom) {
   if (!pickMap) {
@@ -791,27 +792,45 @@ function loadAmap() {
   const K = APP_CONFIG.AMAP_JS_KEY;
   if (!K) return (amapReady = Promise.reject(new Error("키 없음")));
   window._AMapSecurityConfig = { securityJsCode: APP_CONFIG.AMAP_JS_SECURITY || "" };
-  amapReady = new Promise((res, rej) => {
+  const once = () => new Promise((res, rej) => {
     const el = document.createElement("script");
     el.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(K)}&plugin=AMap.PlaceSearch`;
-    el.onload = () => window.AMap ? res(window.AMap) : rej(new Error("Amap을 불러오지 못했습니다"));
-    el.onerror = () => { amapReady = null; rej(new Error("Amap에 연결하지 못했습니다")); };
+    el.onload = () => window.AMap ? res(window.AMap) : (el.remove(), rej(new Error("Amap을 불러오지 못했습니다")));
+    el.onerror = () => { el.remove(); rej(new Error("Amap에 연결하지 못했습니다")); };
     document.head.appendChild(el);
   });
+  // 네트워크가 잠깐 불안정해도 되도록 두 번까지 다시 시도한다
+  amapReady = once().catch(() => new Promise(r => setTimeout(r, 800)).then(once)).catch(() => new Promise(r => setTimeout(r, 1500)).then(once)).catch(e => { amapReady = null; throw e; });
   return amapReady;
+}
+const toRow = x => ({ name: x.name, address: x.address || "", kind: (x.type || "").split(";").pop(), type: x.type || "", lat: x.location.lat, lng: x.location.lng, cost: x.cost || (x.biz_ext && x.biz_ext.cost) || "" });
+let nearTimer = null;
+function nearbyAmap(pt) {
+  if (!APP_CONFIG.AMAP_JS_KEY) return;
+  clearTimeout(nearTimer);
+  nearTimer = setTimeout(async () => {
+    try {
+      const AMap = await loadAmap(), ps = new AMap.PlaceSearch({ type: "餐饮服务", pageSize: 10, pageIndex: 1, extensions: "all" });
+      ps.searchNearBy("", [pt[1], pt[0]], 150, (st, res) => {
+        const pois = ((res && res.poiList && res.poiList.pois) || []).filter(x => x.location);
+        if (st === "complete" && pois.length) showAmapResults(pois.map(toRow), null, "이 위치 근처 가게(눌러서 고르면 이름이 채워집니다)");
+        else $("amapres").innerHTML = "";
+      });
+    } catch (e) { /* 검색을 쓸 수 없으면 조용히 넘어간다 */ }
+  }, 400);
 }
 const guessCat = t => {   // Amap 분류 글자로 음식 종류를 짐작한다
   t = t || "";
-  if (/火锅/.test(t)) return "훠궈"; if (/烧烤|烤肉|烤鱼|烤鸭|串/.test(t)) return "꼬치·구이"; if (/海鲜/.test(t)) return "해산물";
-  if (/韩国|韩餐|韩式/.test(t)) return "한식"; if (/日本|寿司|日料/.test(t)) return "일식"; if (/自助/.test(t)) return "뷔페";
+  if (/火锅/.test(t)) return "훠궈"; if (/韩国|韩餐|韩式/.test(t)) return "한식"; if (/烧烤|烤肉|烤鱼|烤鸭|串/.test(t)) return "꼬치·구이"; if (/海鲜/.test(t)) return "해산물";
+  if (/日本|寿司|日料/.test(t)) return "일식"; if (/自助/.test(t)) return "뷔페";
   if (/超市|市场|商场|批发/.test(t)) return "시장·마트"; if (/咖啡|茶|甜品|冷饮|糕饼|面包|小吃|快餐/.test(t)) return "간식";
   if (/西餐|酒吧|外国|美式|意大利/.test(t)) return "술집·양식"; if (/中餐|东北|川菜|粤菜|湘菜|饺|面|家常/.test(t)) return "중식";
   return "";
 };
-function showAmapResults(list, msg) {
+function showAmapResults(list, msg, title) {
   const box = $("amapres");
   if (msg) { box.innerHTML = `<div class="am">${esc(msg)}</div>`; return; }
-  box.innerHTML = list.map((r, i) => `<div class="ar" data-ai="${i}"><b>${esc(r.name)}</b><span>${esc([r.kind, r.address].filter(Boolean).join(" · "))}</span></div>`).join("");
+  box.innerHTML = (title ? `<div class="am">${esc(title)}</div>` : "") + list.map((r, i) => `<div class="ar" data-ai="${i}"><b>${esc(r.name)}</b><span>${esc([r.kind, r.address].filter(Boolean).join(" · "))}</span></div>`).join("");
   box._list = list;
 }
 $("amapq").addEventListener("input", () => {
@@ -825,8 +844,8 @@ $("amapq").addEventListener("input", () => {
       const ps = new AMap.PlaceSearch({ city: "大连", citylimit: true, pageSize: 8, pageIndex: 1, extensions: "all" });
       ps.search(q, (st, res) => {
         const pois = (res && res.poiList && res.poiList.pois) || [];
-        if (st !== "complete" || !pois.length) return showAmapResults(null, st === "no_data" || !pois.length ? "찾은 가게가 없습니다. 중국어 이름으로 다시 검색해 보세요" : "Amap 검색에 실패했습니다");
-        showAmapResults(pois.filter(x => x.location).map(x => ({ name: x.name, address: x.address || "", kind: (x.type || "").split(";").pop(), type: x.type || "", lat: x.location.lat, lng: x.location.lng, cost: x.cost || (x.biz_ext && x.biz_ext.cost) || "" })));
+        if (st !== "complete" || !pois.length) return showAmapResults(null, st === "no_data" || !pois.length ? "찾은 가게가 없습니다. 중국어 이름으로 다시 검색하거나, 아래 지도에서 위치를 눌러 근처 가게를 골라 주세요" : "Amap 검색이 잠시 막혔습니다. 잠시 뒤 다시 시도해 주세요");
+        showAmapResults(pois.filter(x => x.location).map(toRow));
       });
     } catch (e) { showAmapResults(null, "Amap 검색을 쓸 수 없습니다: " + (e.message || e)); }
   }, 350);
@@ -835,9 +854,9 @@ $("amapres").addEventListener("click", e => {
   const row = e.target.closest("[data-ai]"); if (!row) return;
   const r = $("amapres")._list[+row.dataset.ai], f = $("sugform"), pt = [r.lat, r.lng];   // Amap 좌표(GCJ-02)는 지도에 그대로 쓴다
   f.elements["zh"].value = r.name; f.elements["zh"].dispatchEvent(new Event("input"));   // 한글 이름 자동 표기
-  const cat = guessCat(r.type); if (cat && !f.elements["cat"].value) { f.elements["cat"].value = cat; kindTouched = true; }
+  const cat = guessCat(r.name + " " + r.type); if (cat && !f.elements["cat"].value) { f.elements["cat"].value = cat; kindTouched = true; }
   if (r.cost && !f.elements["price"].value) f.elements["price"].value = String(Math.round(parseFloat(r.cost)) || "");
-  pickMap.setView(pt, 17); setPick(pt);
+  pickMap.setView(pt, 17); setPick(pt, true);
   $("amapq").value = ""; $("amapres").innerHTML = "";
   toast("Amap에서 찾은 위치를 지도에 표시했습니다");
 });
