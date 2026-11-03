@@ -44,7 +44,7 @@ create table if not exists public.suggestions (
   menu        text not null default '' check (char_length(menu) <= 300),
   note        text not null default '' check (char_length(note) <= 1500),
   photos      text[] not null default '{}' check (coalesce(array_length(photos, 1), 0) <= 10),
-  status      text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  status      text not null default 'approved' check (status in ('pending', 'approved', 'rejected')),   -- 바로 공개. 관리자가 숨기면 rejected
   admin_note  text not null default '',
   target_place text not null default '' check (char_length(target_place) <= 40),   -- 비어 있지 않으면 '이미 있는 가게에 덧붙이는 내용'
   created_at  timestamptz not null default now()
@@ -144,13 +144,13 @@ create policy comments_update_admin on public.comments for update to authenticat
 drop policy if exists comments_delete on public.comments;
 create policy comments_delete on public.comments for delete to authenticated using (user_id = auth.uid() or public.is_admin());
 
--- suggestions: 누구나 승인된 것만 읽기, 승인된 사람만 쓰기(항상 대기 상태로). 수정·삭제는 아래 '본인 글 수정' 절 참고
+-- suggestions: 누구나 공개(approved)된 것만 읽기, 승인된 사람만 쓰기(바로 공개). 수정·삭제는 아래 '본인 글 수정' 절 참고
 drop policy if exists suggestions_select on public.suggestions;
 create policy suggestions_select on public.suggestions for select to anon, authenticated
   using (status = 'approved' or user_id = auth.uid() or public.is_admin());
 drop policy if exists suggestions_insert on public.suggestions;
 create policy suggestions_insert on public.suggestions for insert to authenticated
-  with check (user_id = auth.uid() and public.is_approved() and status = 'pending');
+  with check (user_id = auth.uid() and public.is_approved() and status = 'approved');
 drop policy if exists suggestions_update_admin on public.suggestions;
 create policy suggestions_update_admin on public.suggestions for update to authenticated using (public.is_admin()) with check (public.is_admin());
 drop policy if exists suggestions_delete on public.suggestions;

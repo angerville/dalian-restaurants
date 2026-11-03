@@ -44,7 +44,7 @@ label{display:grid;gap:2px;font-size:12px;color:var(--sub)}
 const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
 const app = document.getElementById("app");
 let me = null, tab = "pending", isAdmin = false, myStatus = "";
-const TABS = [["pending", "가입 승인"], ["members", "구성원"], ["suggest", "새 가게 제안"], ["comments", "댓글"], ["admins", "관리자"]];
+const TABS = [["pending", "가입 승인"], ["members", "구성원"], ["suggest", "올라온 가게"], ["comments", "댓글"], ["admins", "관리자"]];
 
 function esc(v) { return String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 function toast(t) { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); }
@@ -132,27 +132,25 @@ async function viewMembers(main) {
   }));
 }
 
-// ---- 새 가게 제안 ----
+// ---- 올라온 가게(선생님이 올린 새 가게와 추가 내용: 바로 공개되고, 문제가 있으면 여기서 숨긴다) ----
 async function viewSuggest(main) {
-  const { data, error } = await sb.from("suggestions").select("*").eq("status", "pending").order("created_at");
+  const { data, error } = await sb.from("suggestions").select("*").order("created_at", { ascending: false }).limit(100);
   if (error) return main.innerHTML = `<div class="card">${esc(error.message)}</div>`;
+  const ST = { approved: "공개 중", rejected: "숨김", pending: "대기" };
   main.innerHTML = data.length ? data.map(s => `<div class="card" data-id="${s.id}">
-    <div><span class="name">${esc(s.ko)}</span>${s.target_place ? ' <span class="badge ok">가게 ' + esc(s.target_place) + '에 내용 추가</span>' : ""} <span class="sub">${esc(s.author_name || "")} · ${fmt(s.created_at)}</span></div>
+    <div><span class="name">${esc(s.ko)}</span> <span class="badge ${s.status === "approved" ? "ok" : ""}">${ST[s.status] || s.status}</span>${s.target_place ? ' <span class="badge">가게 ' + esc(s.target_place) + '에 추가한 내용</span>' : ""} <span class="sub">${esc(s.author_name || "")} · ${fmt(s.created_at)}</span></div>
     <div class="photos">${(s.photos || []).map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join("")}</div>
     <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <label>한글 이름<input type="text" data-f="ko" value="${esc(s.ko)}"></label><label>Amap 이름<input type="text" data-f="zh" value="${esc(s.zh)}"></label>
       <label>인당 가격<input type="text" data-f="price" value="${esc(s.price)}"></label><label>음식 종류<input type="text" data-f="kind" value="${esc(s.kind)}"></label>
-      <label>위도<input type="text" data-f="lat" value="${esc(s.lat ?? "")}"></label><label>경도<input type="text" data-f="lon" value="${esc(s.lon ?? "")}"></label>
       <label style="grid-column:span 2">추천 메뉴<input type="text" data-f="menu" value="${esc(s.menu)}"></label>
       <label style="grid-column:span 2">메모<textarea rows="2" data-f="note">${esc(s.note)}</textarea></label>
-      <label style="grid-column:span 2">관리자 메모(거절 사유 등)<input type="text" data-f="admin_note" value="${esc(s.admin_note)}"></label></div>
-    <div class="row"><button class="on" data-act="approved">승인</button><button data-act="rejected">거절</button></div></div>`).join("") : `<div class="card sub">대기 중인 제안이 없습니다</div>`;
+      <label style="grid-column:span 2">관리자 메모(숨긴 이유 등)<input type="text" data-f="admin_note" value="${esc(s.admin_note)}"></label></div>
+    <div class="row"><button data-act="${s.status}">저장</button>${s.status === "approved" ? '<button data-act="rejected">숨기기</button>' : '<button class="on" data-act="approved">공개</button>'}</div></div>`).join("") : `<div class="card sub">올라온 가게가 없습니다</div>`;
   main.querySelectorAll(".card[data-id]").forEach(card => card.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", async () => {
     const v = {}; card.querySelectorAll("[data-f]").forEach(i => v[i.dataset.f] = i.value.trim());
-    v.lat = v.lat === "" ? null : Number(v.lat); v.lon = v.lon === "" ? null : Number(v.lon);
-    if ((v.lat !== null && !isFinite(v.lat)) || (v.lon !== null && !isFinite(v.lon))) return toast("위도·경도는 숫자로");
     v.status = b.dataset.act;
-    if (await run(sb.from("suggestions").update(v).eq("id", card.dataset.id), v.status === "approved" ? "승인함" : "거절함")) show();
+    if (await run(sb.from("suggestions").update(v).eq("id", card.dataset.id), v.status === "rejected" ? "숨겼습니다" : "저장했습니다")) show();
   })));
 }
 

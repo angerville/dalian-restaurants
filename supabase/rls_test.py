@@ -128,17 +128,18 @@ def run():
     T.check("숨김 상태로 쓰기 거부", denied(r), r.text[:120])
     r = requests.post(rest("comments"), headers=hdr(tu, prefer), json={"place_no": "1", "body": "x" * 1001})
     T.check("1000자 초과 거부", denied(r), r.text[:120])
-    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "시험 가게", "note": "메모"})
+    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "시험 가게", "note": "메모", "status": "approved"})
     sok = r.status_code in (200, 201) and r.json()
-    T.check("제안 쓰기 허용(대기)", sok and r.json()[0]["status"] == "pending", r.text[:120])
+    T.check("가게 글은 승인 없이 바로 공개로 올라감", sok and r.json()[0]["status"] == "approved", r.text[:120])
     sid = r.json()[0]["id"] if sok else None
-    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "스스로 승인", "status": "approved"})
-    T.check("승인 상태로 제안 쓰기 거부", denied(r), r.text[:120])
-    T.check("대기 중 제안은 방문자에게 안 보임", requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json() == [])
-    T.check("대기 중 제안은 본인에게 보임", len(requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr(tu)).json()) == 1)
-    r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"status": "approved"})
+    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "대기로 쓰기", "status": "pending"})
+    T.check("대기·숨김 상태로는 쓸 수 없음", denied(r), r.text[:120])
+    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "숨김으로 쓰기", "status": "rejected"})
+    T.check("숨김 상태로 쓰기 거부", denied(r), r.text[:120])
+    T.check("올린 가게는 바로 방문자에게 보임", len(requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json()) == 1)
+    r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"status": "rejected"})
     row = r.json()[0] if r.status_code == 200 and r.json() else {}
-    T.check("본인이 제안 상태를 승인으로 바꿀 수 없음", denied(r) or row.get("status") == "pending", r.text[:120])
+    T.check("본인이 제안 상태를 바꿀 수 없음", denied(r) or row.get("status") == "approved", r.text[:120])
 
     print("== 본인 글 수정")
     requests.patch(rest(f"profiles?user_id=eq.{oid}"), headers=hdr(ta, prefer), json={"status": "approved"})  # 다른 사람도 승인해 둔다
@@ -154,28 +155,29 @@ def run():
         now = requests.get(rest(f"comments?id=eq.{cid}&select=body"), headers=hdr()).json()
         T.check("방문자는 댓글을 못 고침", denied(r) and now and now[0]["body"] == "수정한 댓글", r.text[:120])
     if sid:
-        r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"ko": "수정한 가게", "note": "수정 메모", "photos": ["https://example.com/a.webp"], "status": "approved", "admin_note": "위조"})
+        r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer), json={"ko": "수정한 가게", "note": "수정 메모", "photos": ["https://example.com/a.webp"], "status": "rejected", "admin_note": "위조"})
         row = r.json()[0] if r.status_code == 200 and r.json() else {}
         T.check("본인 제안 내용·사진 수정", row.get("ko") == "수정한 가게" and row.get("photos") == ["https://example.com/a.webp"], r.text[:200])
-        T.check("제안의 상태·관리자 메모는 바꿀 수 없음", row.get("status") == "pending" and row.get("admin_note") == "", r.text[:200])
+        T.check("제안의 상태·관리자 메모는 바꿀 수 없음", row.get("status") == "approved" and row.get("admin_note") == "", r.text[:200])
         r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(to, prefer), json={"ko": "남이 수정"})
         T.check("승인된 다른 사람은 남의 제안을 못 고침", denied(r), r.text[:120])
         r = requests.delete(rest(f"suggestions?id=eq.{sid}"), headers=hdr(to, prefer))
         T.check("승인된 다른 사람은 남의 제안을 못 지움", denied(r), r.text[:120])
 
     print("== 이미 있는 가게에 내용 추가")
-    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "추가 정보 시험", "menu": "새우죽", "target_place": "2"})
+    r = requests.post(rest("suggestions"), headers=hdr(tu, prefer), json={"ko": "추가 정보 시험", "menu": "새우죽", "target_place": "2", "status": "approved"})
     aok = r.status_code in (200, 201) and bool(r.json())
-    T.check("이미 있는 가게에 내용 추가 제출(대기)", aok and r.json()[0]["status"] == "pending" and r.json()[0]["target_place"] == "2", r.text[:160])
+    T.check("이미 있는 가게에 내용 추가(바로 공개)", aok and r.json()[0]["status"] == "approved" and r.json()[0]["target_place"] == "2", r.text[:160])
     aid = r.json()[0]["id"] if aok else None
     if aid:
         r = requests.patch(rest(f"suggestions?id=eq.{aid}"), headers=hdr(tu, prefer), json={"target_place": "3", "menu": "새우죽, 만두"})
         row = r.json()[0] if r.status_code == 200 and r.json() else {}
         T.check("내용은 고칠 수 있지만 대상 가게는 바꿀 수 없음", row.get("menu") == "새우죽, 만두" and row.get("target_place") == "2", r.text[:200])
-        T.check("승인 전 추가 내용은 방문자에게 안 보임", requests.get(rest(f"suggestions?id=eq.{aid}&select=id"), headers=hdr()).json() == [])
-        requests.patch(rest(f"suggestions?id=eq.{aid}"), headers=hdr(ta, prefer), json={"status": "approved"})
         seen = requests.get(rest(f"suggestions?id=eq.{aid}&select=target_place,menu"), headers=hdr()).json()
-        T.check("승인된 추가 내용은 방문자에게 보임", len(seen) == 1 and seen[0]["target_place"] == "2", str(seen))
+        T.check("추가한 내용은 바로 방문자에게 보임", len(seen) == 1 and seen[0]["target_place"] == "2", str(seen))
+        requests.patch(rest(f"suggestions?id=eq.{aid}"), headers=hdr(ta, prefer), json={"status": "rejected"})
+        T.check("관리자가 숨기면 방문자에게 안 보임", requests.get(rest(f"suggestions?id=eq.{aid}&select=id"), headers=hdr()).json() == [])
+        requests.patch(rest(f"suggestions?id=eq.{aid}"), headers=hdr(ta, prefer), json={"status": "approved"})
         r = requests.delete(rest(f"suggestions?id=eq.{aid}"), headers=hdr(tu, prefer))
         T.check("본인이 추가한 내용을 삭제", r.status_code == 200 and bool(r.json()), r.text[:120])
 
@@ -221,9 +223,11 @@ def run():
         T.check("관리자가 댓글 숨기기", r.status_code == 200 and r.json(), r.text[:120])
         T.check("숨긴 댓글은 방문자에게 안 보임", requests.get(rest(f"comments?id=eq.{cid}&select=id"), headers=hdr()).json() == [])
     if sid:
-        r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(ta, prefer), json={"status": "approved"})
-        T.check("관리자가 제안 승인", r.status_code == 200 and r.json(), r.text[:120])
-        T.check("승인된 제안은 방문자에게 보임", len(requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json()) == 1)
+        r = requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(ta, prefer), json={"status": "rejected"})
+        T.check("관리자가 올라온 가게를 숨김", r.status_code == 200 and bool(r.json()), r.text[:120])
+        T.check("숨긴 가게는 방문자에게 안 보임", requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json() == [])
+        requests.patch(rest(f"suggestions?id=eq.{sid}"), headers=hdr(ta, prefer), json={"status": "approved"})
+        T.check("다시 공개하면 방문자에게 보임", len(requests.get(rest(f"suggestions?id=eq.{sid}&select=id"), headers=hdr()).json()) == 1)
 
     if sid:
         r = requests.delete(rest(f"suggestions?id=eq.{sid}"), headers=hdr(tu, prefer))

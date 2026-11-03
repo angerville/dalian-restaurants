@@ -164,6 +164,7 @@ form.guide{width:min(560px,92vw)}
     <button id="guidebtn">안내</button>
     <button id="suggest">새 가게 추천</button>
     <button id="mine" style="display:none">내 글</button>
+    <button id="adminbtn" style="display:none">관리자</button>
     <span class="who" id="who"></span>
     <button id="login">로그인</button>
   </div>
@@ -204,7 +205,7 @@ form.guide{width:min(560px,92vw)}
   <label>사진(최대 10장)<input type="file" name="photos" accept="image/*" multiple></label>
   <div class="prev" id="prev"></div>
   <div class="msg" id="sugmsg"></div>
-  <div class="actions"><button type="button" id="sugcancel">취소</button><button type="submit" class="on" id="sugsend">제출</button></div>
+  <div class="actions"><button type="button" id="sugcancel">취소</button><button type="submit" class="on" id="sugsend">올리기</button></div>
 </form></dialog>
 
 <dialog id="mydlg"><form class="dlg" id="myform">
@@ -622,9 +623,15 @@ async function refreshUser() {
   else $("who").textContent = "";
   $("login").textContent = user ? "로그아웃" : "로그인";
   $("mine").style.display = (user && status === "approved") ? "" : "none";
+  $("adminbtn").style.display = admin ? "" : "none";
+  if (admin) {   // 가입 승인을 기다리는 사람 수를 버튼에 표시
+    const n = await sb.from("profiles").select("user_id", { count: "exact", head: true }).eq("status", "pending");
+    $("adminbtn").textContent = n.count ? `관리자 ${n.count}` : "관리자";
+  }
   $("who").title = admin ? "관리자" : "";
   render();
 }
+$("adminbtn").addEventListener("click", () => { location.href = "admin.html"; });
 $("login").addEventListener("click", async () => { if (user) { await sb.auth.signOut(); toast("로그아웃"); return refreshUser(); } $("logdlg").showModal(); });
 $("logcancel").addEventListener("click", () => $("logdlg").close());
 $("logform").addEventListener("submit", async e => {
@@ -693,7 +700,7 @@ function setMode(mode) {   // "new": 새 가게 / "add": 이미 있는 가게에
 function enterAdd(p) {
   target = p; setMode("add");
   $("sugtitle").textContent = `「${p.ko}」에 내용 추가`;
-  $("sugsend").textContent = editRow ? "저장" : "제출"; $("sugmsg").textContent = "";
+  $("sugsend").textContent = editRow ? "저장" : "올리기"; $("sugmsg").textContent = "";
 }
 function leaveAdd() { target = null; setMode("new"); $("sugtitle").textContent = "새 가게 추천"; checkDup(); }
 
@@ -721,7 +728,7 @@ $("suggest").addEventListener("click", () => {
   if (!user) { toast("로그인이 필요합니다"); return $("logdlg").showModal(); }
   if (status !== "approved") return toast(status === "pending" ? "관리자 승인 후 추천할 수 있습니다" : "추천할 수 없는 계정입니다");
   editRow = null; editBase = null; target = null; items = []; origPhotos = []; pickPt = null; kindTouched = false; pickMoved = false;
-  $("sugform").reset(); setMode("new"); $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "제출";
+  $("sugform").reset(); setMode("new"); $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "올리기";
   renderPrev(); $("sugmsg").textContent = ""; $("dup").style.display = "none"; $("sugdlg").showModal();
   const c = map ? map.getCenter() : { lat: 38.93, lng: 121.62 }, z = map ? Math.max(13, Math.min(map.getZoom(), 17)) : 13;
   initPick(myPos || [c.lat, c.lng], myPos ? 16 : z);
@@ -840,11 +847,11 @@ $("sugform").addEventListener("submit", async e => {
       $("sugdlg").close(); toast("수정했습니다"); load();
       if (fromMine) { fromMine = false; openMine(); }
     } else {
-      const { error } = await sb.from("suggestions").insert({ ...fields, photos: finalPhotos });
+      const { error } = await sb.from("suggestions").insert({ ...fields, photos: finalPhotos, status: "approved" });   // 가게 글은 승인 없이 바로 공개
       if (error) throw error;
-      $("sugdlg").close(); toast(isAdd ? "제출했습니다. 관리자 확인 후 가게에 추가됩니다" : "제출했습니다. 관리자 확인 후 공개됩니다");
+      $("sugdlg").close(); toast(isAdd ? "가게에 내용을 추가했습니다" : "새 가게를 올렸습니다"); load();
     }
-  } catch (err) { say("제출하지 못했습니다: " + (err.message || err)); }
+  } catch (err) { say("올리지 못했습니다: " + (err.message || err)); }
   btn.disabled = false;
 });
 
@@ -899,7 +906,7 @@ async function openMine(silent) {
   $("mylist").innerHTML = '<div class="by" style="color:var(--sub)">불러오는 중</div>';
   const { data, error } = await sb.from("suggestions").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
   if (error) { $("mylist").textContent = "불러오지 못했습니다"; return; }
-  MY = data; const ST = { pending: "승인 대기", approved: "공개 중", rejected: "거절됨" };
+  MY = data; const ST = { pending: "승인 대기", approved: "공개 중", rejected: "숨김" };
   $("mylist").innerHTML = data.length ? data.map(x => `<div class="c"><div><b>${esc(x.ko)}</b>${x.target_place ? '<span class="by"> · 가게에 추가한 내용</span>' : ""}<span class="tag">${ST[x.status] || x.status}</span>${x.updated_at ? ' <span class="by">수정됨</span>' : ""}</div>
     ${x.admin_note ? `<div class="by">관리자 메모: ${esc(x.admin_note)}</div>` : ""}<div class="by"><button type="button" data-myedit="${x.id}">수정</button> <button type="button" data-mydel="${x.id}">삭제</button></div></div>`).join("")
     : '<div class="by" style="color:var(--sub)">올린 글이 없습니다. 댓글은 각 가게의 댓글 칸에서 수정할 수 있습니다.</div>';
