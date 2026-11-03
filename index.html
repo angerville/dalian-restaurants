@@ -45,6 +45,7 @@ header.top h1{font-size:18px;margin:0 6px 0 0}
 .sortbar{position:sticky;top:0;z-index:5;margin:-12px -16px 0;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
 .sortbar .cnt{flex:1;font-size:13px;color:var(--sub)}
 .sortbar button{padding:3px 12px;font-size:13px;border-radius:999px}
+.sortbar.m{margin:0 -10px;padding:6px 10px}
 .likebtn.on{background:#fff3e8;border-color:var(--accent);color:var(--accent);font-weight:600}
 .nm.link{cursor:pointer}
 .nm.link:hover{color:var(--accent);text-decoration:underline}
@@ -246,7 +247,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-162825";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-163052";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -466,9 +467,17 @@ function sortList(list) {
 }
 let listKey = "", pendingScroll = null;
 function inView(p) { return !p.glat || !map || map.getSize().x === 0 || map.getBounds().contains([p.glat, p.glon]); }
-function renderList(force) {   // 왼쪽 목록: 필터를 통과한 가게 중 지금 지도에 보이는 곳만 고른 순서대로 그린다
-  if (isMobile()) return;
-  const inside = lastShown.filter(p => p.glat && inView(p)), noPos = lastShown.filter(p => !p.glat), shown = inside.concat(noPos);
+const viewShown = () => lastShown.filter(p => p.glat && inView(p)).concat(lastShown.filter(p => !p.glat));   // 필터를 통과한 가게 중 지금 지도에 보이는 곳(위치 없는 가게는 항상)
+const sortBtns = () => `<button class="${SORT === "new" ? "on" : ""}" data-sort="new">최신순</button><button class="${SORT === "pop" ? "on" : ""}" data-sort="pop">인기순</button>`;
+let sheetKey = "";
+function renderList(force) {   // 왼쪽 목록(PC): 지금 지도에 보이는 가게만 고른 순서대로 그린다. 폰은 하단 시트 목록을 다시 그린다
+  if (isMobile()) {
+    if (sheetMode !== "list") return;
+    const k = SORT + "|" + viewShown().map(p => p.id).join(",");
+    if (!force && k !== sheetKey) drawSheet();   // render()가 부를 때(force)는 곧바로 시트를 다시 그리므로 건너뛴다
+    return;
+  }
+  const shown = viewShown();
   const key = SORT + "|" + shown.map(p => p.id).join(",");
   if (!force && key === listKey) { if (pendingScroll) scrollToCard(); return; }
   listKey = key;
@@ -588,8 +597,10 @@ function drawSheet() {
     $("sheettitle").textContent = p.ko; $("sheetclose").style.display = "";
     body.innerHTML = ""; const c = card(p); c.removeAttribute("id"); c.querySelector("[data-pin]")?.remove(); const nm0 = c.querySelector(".nm"); if (nm0) { const nm1 = nm0.cloneNode(true); nm1.classList.remove("link"); nm1.removeAttribute("title"); nm0.replaceWith(nm1); } body.appendChild(c);
   } else {
-    $("sheettitle").textContent = `가게 ${lastShown.length}곳`; $("sheetclose").style.display = "none";
-    body.innerHTML = lastShown.length ? lastShown.map(listRow).join("") : '<div class="empty">조건에 맞는 가게가 없습니다</div>';
+    const vs = viewShown(); sheetKey = SORT + "|" + vs.map(p => p.id).join(",");
+    $("sheettitle").textContent = `지도에 보이는 가게 ${vs.length}곳`; $("sheetclose").style.display = "none";
+    body.innerHTML = `<div class="sortbar m"><span class="cnt">${vs.length < lastShown.length ? `전체 ${lastShown.length}곳 중` : ""}</span>${sortBtns()}</div>`
+      + (vs.length ? vs.map(listRow).join("") : `<div class="empty">${lastShown.length ? "지금 지도에는 가게가 없습니다. 지도를 움직이거나 줄여 보세요" : "조건에 맞는 가게가 없습니다"}</div>`);
   }
   lastDrawn = mode; body.scrollTop = keep;
 }
@@ -615,7 +626,9 @@ function closeSheet() {
   sheetMode = "list"; drawSheet(); setSheet("peek");
 }
 $("sheetclose").addEventListener("click", closeSheet);
-$("sheetbody").addEventListener("click", e => { const r = e.target.closest("[data-lid]"); if (r) openSheet(PLACES.find(x => x.id === r.dataset.lid), true); });
+$("sheetbody").addEventListener("click", e => {
+  const sb2 = e.target.closest("[data-sort]"); if (sb2) { if (sb2.dataset.sort !== SORT) { SORT = sb2.dataset.sort; $("sheetbody").scrollTop = 0; render(); } return; }
+  const r = e.target.closest("[data-lid]"); if (r) openSheet(PLACES.find(x => x.id === r.dataset.lid), true); });
 // 시트 높이 조절: 손잡이·제목줄은 어디서나, 시트 안쪽(사진·글·목록)은 '맨 위일 때 아래로' 또는 '작을 때 위로' 끌면 높이가 바뀐다
 let drag = null;
 function dragStart(y) { drag = { y0: y, top0: sheetTopPx(), t0: performance.now(), moved: false, ly: y }; $("sheet").classList.add("dragging"); }
