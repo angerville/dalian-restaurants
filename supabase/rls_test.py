@@ -15,6 +15,14 @@ import sys
 import time
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# 네트워크가 잠깐 끊겨도 시험이 멈추지 않게 재시도한다
+_s = requests.Session()
+_s.mount("https://", HTTPAdapter(max_retries=Retry(total=5, connect=5, read=2, other=5, backoff_factor=1.0, allowed_methods=None, status_forcelist=(502, 503, 504))))
+for _m in ("get", "post", "patch", "delete", "put"):
+    setattr(requests, _m, getattr(_s, _m))
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = open(os.path.join(HERE, "..", "config.js"), encoding="utf-8").read()
