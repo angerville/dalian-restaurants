@@ -64,6 +64,8 @@ form.dlg h2{font-size:17px;margin:0}
 .prev{display:flex;gap:6px;flex-wrap:wrap}
 .prev img{width:60px;height:60px;object-fit:cover;border-radius:8px}
 .msg{min-height:20px;font-size:13px;color:var(--accent)}
+.swap{text-align:center;font-size:13px;color:var(--sub)}
+.swap a{color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:4px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:2000}
 #toast.show{opacity:1}
 /* 하단 시트(모바일): 목록 ↔ 가게 상세, 위아래로 끌어서 높이를 바꾼다 */
@@ -190,12 +192,13 @@ form.guide{width:min(560px,92vw)}
 </form></dialog>
 
 <dialog id="logdlg"><form class="dlg" id="logform">
-  <h2>로그인</h2>
+  <h2 id="logtitle">로그인</h2>
   <label>이메일<input type="email" name="email" required autocomplete="username"></label>
+  <label id="namebox" style="display:none">이름(선생님 이름)<input type="text" name="name" autocomplete="name"></label>
   <label>비밀번호(6자 이상)<input type="password" name="pw" minlength="6" required autocomplete="current-password"></label>
-  <label>이름(가입할 때만)<input type="text" name="name" autocomplete="name"></label>
   <div class="msg" id="logmsg"></div>
-  <div class="actions"><button type="button" id="logcancel">취소</button><button type="submit" class="on" data-m="in" style="order:3">로그인</button><button type="submit" data-m="up" style="order:2">가입</button></div>
+  <div class="actions"><button type="button" id="logcancel">취소</button><button type="submit" class="on" id="logsubmit">로그인</button></div>
+  <div class="swap" id="logswap"></div>
 </form></dialog>
 
 <dialog id="sugdlg"><form class="dlg" id="sugform">
@@ -232,7 +235,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-114413";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-121523";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -667,10 +670,20 @@ async function refreshUser() {
   render();
 }
 $("adminbtn").addEventListener("click", () => { location.href = "admin.html"; });
-$("login").addEventListener("click", async () => { if (user) { await sb.auth.signOut(); toast("로그아웃"); return refreshUser(); } $("logdlg").showModal(); });
+$("login").addEventListener("click", async () => { if (user) { await sb.auth.signOut(); toast("로그아웃"); return refreshUser(); } openLogin("in"); });
+let logMode = "in";
+function openLogin(m) {   // 로그인과 회원가입은 같은 창의 두 화면: 가입 화면에만 이름 칸이 있다
+  logMode = m; const f = $("logform"), up = m === "up";
+  $("logtitle").textContent = up ? "회원가입" : "로그인"; $("logsubmit").textContent = up ? "가입하기" : "로그인";
+  $("namebox").style.display = up ? "" : "none"; f.elements["name"].required = up;
+  f.elements["pw"].autocomplete = up ? "new-password" : "current-password"; $("logmsg").textContent = "";
+  $("logswap").innerHTML = up ? '이미 계정이 있나요?<a data-sw="in">로그인</a>' : '처음이신가요?<a data-sw="up">회원가입</a>';
+  if (!$("logdlg").open) $("logdlg").showModal();
+}
+$("logswap").addEventListener("click", e => { const a = e.target.closest("[data-sw]"); if (a) openLogin(a.dataset.sw); });
 $("logcancel").addEventListener("click", () => $("logdlg").close());
 $("logform").addEventListener("submit", async e => {
-  e.preventDefault(); const f = $("logform"), m = e.submitter?.dataset.m || "in", email = f.email.value.trim(), password = f.pw.value;
+  e.preventDefault(); const f = $("logform"), m = logMode, email = f.email.value.trim(), password = f.pw.value;
   $("logmsg").textContent = "";
   if (!sb) return say("서버에 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요");
   const btns = f.querySelectorAll("button[type=submit]"); btns.forEach(b => b.disabled = true);
@@ -761,7 +774,7 @@ $("sugform").elements["ko"].addEventListener("input", () => { clearTimeout(dupTi
 $("sugback").addEventListener("click", leaveAdd);
 
 $("suggest").addEventListener("click", () => {
-  if (!user) { toast("로그인이 필요합니다"); return $("logdlg").showModal(); }
+  if (!user) { toast("로그인이 필요합니다"); return openLogin("in"); }
   if (status !== "approved") return toast(status === "pending" ? "관리자 승인 후 추천할 수 있습니다" : "추천할 수 없는 계정입니다");
   editRow = null; editBase = null; target = null; items = []; origPhotos = []; pickPt = null; kindTouched = false; pickMoved = false;
   $("sugform").reset(); setMode("new"); $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "올리기";
