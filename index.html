@@ -197,7 +197,7 @@ form.guide{width:min(560px,92vw)}
   <label id="namebox" style="display:none">이름(선생님 이름)<input type="text" name="name" autocomplete="name"></label>
   <label>비밀번호(6자 이상)<input type="password" name="pw" minlength="6" required autocomplete="current-password"></label>
   <div class="msg" id="logmsg"></div>
-  <div class="actions"><button type="button" id="logcancel">취소</button><button type="submit" class="on" id="logsubmit">로그인</button></div>
+  <div class="actions"><button type="button" id="logcancel">닫기</button><button type="submit" class="on" id="logsubmit">로그인</button></div>
   <div class="swap" id="logswap"></div>
 </form></dialog>
 
@@ -235,7 +235,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-121523";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-131324";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -700,7 +700,9 @@ $("logform").addEventListener("submit", async e => {
       if (error) return say(error.message === "Invalid login credentials" ? "이메일 또는 비밀번호가 맞지 않습니다" : "로그인하지 못했습니다: " + error.message);
       toast("로그인했습니다");
     }
-    $("logdlg").close(); f.reset(); refreshUser();
+    // 창은 자동으로 닫지 않는다: 결과를 확인한 사람이 직접 닫는다
+    $("logmsg").textContent = m === "up" ? "가입 완료. 관리자 승인 후 글을 쓸 수 있습니다. 확인하고 닫아 주세요" : "로그인했습니다. 확인하고 닫아 주세요";
+    f.pw.value = ""; refreshUser();
   } catch (err) { say("연결에 실패했습니다: " + (err.message || err)); }
   finally { btns.forEach(b => b.disabled = false); }
 });
