@@ -118,6 +118,14 @@ select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius
 form.guide{width:min(560px,92vw)}
 .guide h3{font-size:14px;margin:12px 0 4px}
 .guide ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px}
+.amapres{display:grid;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.amapres:empty{display:none}
+.amapres .ar{padding:8px 10px;border-bottom:1px solid var(--soft);cursor:pointer;background:var(--bg)}
+.amapres .ar:last-child{border-bottom:0}
+.amapres .ar:hover{background:var(--soft)}
+.amapres .ar b{font-size:14px}
+.amapres .ar span{display:block;font-size:12px;color:var(--sub)}
+.amapres .am{padding:8px 10px;font-size:13px;color:var(--sub)}
 .locbtn{background:#fff;border:2px solid rgba(0,0,0,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
 .locbtn.on{background:#2563eb;color:#fff;border-color:#2563eb}
 .pin{background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
@@ -195,6 +203,8 @@ form.guide{width:min(560px,92vw)}
   <div id="dup" class="dup" style="display:none"></div>
   <div id="sugaddnote" class="by" style="display:none;color:var(--sub)">추천 메뉴, 가격, 메모, 사진 중 알려 주고 싶은 것을 적어 주세요. <button type="button" id="sugback">새 가게로 등록</button></div>
   <div id="sugnew">
+    <label id="amapbox" style="display:none">Amap에서 가게 찾기<input type="text" id="amapq" autocomplete="off" placeholder="중국어 이름으로 검색 (예: 海底捞)"></label>
+    <div id="amapres" class="amapres"></div>
     <div class="g2"><label>Amap 이름(중국어 이름)<input type="text" name="zh" maxlength="200"></label><label>한글 이름<input type="text" name="ko" required maxlength="100"></label></div>
     <label style="margin-top:10px">위치(지도를 눌러 표시)<div id="pick"></div></label>
     <div class="actions" style="justify-content:flex-start;margin-top:6px"><button type="button" id="geo">현재 위치로 이동</button></div>
@@ -731,7 +741,8 @@ $("suggest").addEventListener("click", () => {
   $("sugform").reset(); setMode("new"); $("sugtitle").textContent = "새 가게 추천"; $("sugsend").textContent = "올리기";
   renderPrev(); $("sugmsg").textContent = ""; $("dup").style.display = "none"; $("sugdlg").showModal();
   const c = map ? map.getCenter() : { lat: 38.93, lng: 121.62 }, z = map ? Math.max(13, Math.min(map.getZoom(), 17)) : 13;
-  initPick(myPos || [c.lat, c.lng], myPos ? 16 : z);
+  $("amapbox").style.display = APP_CONFIG.AMAP_JS_KEY ? "" : "none"; $("amapq").value = ""; $("amapres").innerHTML = "";
+  initPick([c.lat, c.lng], z);
 });
 $("sugcancel").addEventListener("click", () => { $("sugdlg").close(); if (fromMine) { fromMine = false; openMine(); } });
 $("geo").addEventListener("click", () => {
@@ -772,6 +783,64 @@ function openEdit(row) {
   $("sugtitle").textContent = "제안 수정"; $("sugsend").textContent = "저장";
   $("sugdlg").showModal(); initPick(pickPt || myPos || [38.93, 121.62], pickPt ? 17 : 13);
 }
+// ---------- Amap 검색: 가게 이름을 치면 Amap에서 찾아 중국어 이름·위치·종류를 채운다 ----------
+// 고덕지도 JS API 키(도메인 제한 가능, 공개되어도 되는 키)가 config.js에 있을 때만 켜진다
+let amapReady = null, amapTimer = null;
+function loadAmap() {
+  if (amapReady) return amapReady;
+  const K = APP_CONFIG.AMAP_JS_KEY;
+  if (!K) return (amapReady = Promise.reject(new Error("키 없음")));
+  window._AMapSecurityConfig = { securityJsCode: APP_CONFIG.AMAP_JS_SECURITY || "" };
+  amapReady = new Promise((res, rej) => {
+    const el = document.createElement("script");
+    el.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(K)}&plugin=AMap.PlaceSearch`;
+    el.onload = () => window.AMap ? res(window.AMap) : rej(new Error("Amap을 불러오지 못했습니다"));
+    el.onerror = () => { amapReady = null; rej(new Error("Amap에 연결하지 못했습니다")); };
+    document.head.appendChild(el);
+  });
+  return amapReady;
+}
+const guessCat = t => {   // Amap 분류 글자로 음식 종류를 짐작한다
+  t = t || "";
+  if (/火锅/.test(t)) return "훠궈"; if (/烧烤|烤肉|烤鱼|烤鸭|串/.test(t)) return "꼬치·구이"; if (/海鲜/.test(t)) return "해산물";
+  if (/韩国|韩餐|韩式/.test(t)) return "한식"; if (/日本|寿司|日料/.test(t)) return "일식"; if (/自助/.test(t)) return "뷔페";
+  if (/超市|市场|商场|批发/.test(t)) return "시장·마트"; if (/咖啡|茶|甜品|冷饮|糕饼|面包|小吃|快餐/.test(t)) return "간식";
+  if (/西餐|酒吧|外国|美式|意大利/.test(t)) return "술집·양식"; if (/中餐|东北|川菜|粤菜|湘菜|饺|面|家常/.test(t)) return "중식";
+  return "";
+};
+function showAmapResults(list, msg) {
+  const box = $("amapres");
+  if (msg) { box.innerHTML = `<div class="am">${esc(msg)}</div>`; return; }
+  box.innerHTML = list.map((r, i) => `<div class="ar" data-ai="${i}"><b>${esc(r.name)}</b><span>${esc([r.kind, r.address].filter(Boolean).join(" · "))}</span></div>`).join("");
+  box._list = list;
+}
+$("amapq").addEventListener("input", () => {
+  clearTimeout(amapTimer);
+  const q = $("amapq").value.trim();
+  if (q.length < 2) { $("amapres").innerHTML = ""; return; }
+  amapTimer = setTimeout(async () => {
+    showAmapResults(null, "Amap에서 찾는 중");
+    try {
+      const AMap = await loadAmap(), c = map ? map.getCenter() : { lat: 38.93, lng: 121.62 };
+      const ps = new AMap.PlaceSearch({ city: "大连", citylimit: true, pageSize: 8, pageIndex: 1, extensions: "all" });
+      ps.search(q, (st, res) => {
+        const pois = (res && res.poiList && res.poiList.pois) || [];
+        if (st !== "complete" || !pois.length) return showAmapResults(null, st === "no_data" || !pois.length ? "찾은 가게가 없습니다. 중국어 이름으로 다시 검색해 보세요" : "Amap 검색에 실패했습니다");
+        showAmapResults(pois.filter(x => x.location).map(x => ({ name: x.name, address: x.address || "", kind: (x.type || "").split(";").pop(), type: x.type || "", lat: x.location.lat, lng: x.location.lng, cost: x.cost || (x.biz_ext && x.biz_ext.cost) || "" })));
+      });
+    } catch (e) { showAmapResults(null, "Amap 검색을 쓸 수 없습니다: " + (e.message || e)); }
+  }, 350);
+});
+$("amapres").addEventListener("click", e => {
+  const row = e.target.closest("[data-ai]"); if (!row) return;
+  const r = $("amapres")._list[+row.dataset.ai], f = $("sugform"), pt = [r.lat, r.lng];   // Amap 좌표(GCJ-02)는 지도에 그대로 쓴다
+  f.elements["zh"].value = r.name; f.elements["zh"].dispatchEvent(new Event("input"));   // 한글 이름 자동 표기
+  const cat = guessCat(r.type); if (cat && !f.elements["cat"].value) { f.elements["cat"].value = cat; kindTouched = true; }
+  if (r.cost && !f.elements["price"].value) f.elements["price"].value = String(Math.round(parseFloat(r.cost)) || "");
+  pickMap.setView(pt, 17); setPick(pt);
+  $("amapq").value = ""; $("amapres").innerHTML = "";
+  toast("Amap에서 찾은 위치를 지도에 표시했습니다");
+});
 function parseKind(f, kind) {
   const m = /^(.*?)(?:\((.*)\))?$/.exec((kind || "").trim()), head = (m && m[1] || "").trim(), ok = CATS.includes(head);
   f.elements["cat"].value = ok ? head : (kind ? "기타" : "");
