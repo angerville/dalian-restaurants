@@ -118,6 +118,11 @@ update public.profiles set status = 'approved' where email = '새관리자@이�
 2. 저장소 Settings → Pages → *Deploy from a branch* → `main` / `(root)` → Save.
 3. 몇 분 뒤 `https://(계정).github.io/(저장소)/`에서 열립니다. 관리 화면은 같은 주소 뒤에 `/admin.html`입니다.
 
+## 8-1. 코드를 고쳐 올릴 때(새 버전이 바로 보이게)
+- 주소창으로 사이트를 열면 브라우저가 `index.html`을 몇 분 동안 보관해서, 코드를 고쳐 올려도 바로 안 보일 수 있습니다. 이를 막으려고 사이트가 열릴 때 `version.json`(캐시 없이 받음)과 자기 버전(`index.html`의 `BUILD`)을 비교해, 다르면 새 버전으로 한 번 다시 불러옵니다.
+- 그래서 **`index.html` 등 코드를 고쳐 올릴 때는 커밋 전에 `python tools/stamp.py`를 한 번 실행**하세요(`BUILD`와 `version.json`이 같은 새 값으로 바뀝니다). 가게 글·사진(`data/`, `photos/`)만 고칠 때는 필요 없습니다(글 데이터는 항상 새로 받습니다).
+- 이미 예전 버전을 보관한 브라우저는 보관 기간이 지나거나 새로고침해야 바뀝니다. 급하면 주소 뒤에 `?v=아무숫자`를 붙여 열면 됩니다.
+
 ## 9. 알아 둘 점
 
 - 지도 좌표 변환: 한국·일반 GPS는 WGS-84, 중국 지도(Amap)는 GCJ-02입니다. 섞으면 수백 m 어긋납니다.

@@ -232,6 +232,14 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
+const BUILD = "20261103-114413";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+// 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
+(async () => {
+  try {
+    const j = await (await fetch("version.json?t=" + Date.now(), { cache: "no-store" })).json();
+    if (j.v && j.v !== BUILD && sessionStorage.getItem("reloaded_for") !== j.v) { sessionStorage.setItem("reloaded_for", j.v); location.replace(location.pathname + "?v=" + encodeURIComponent(j.v)); }
+  } catch (e) {}
+})();
 const sb = (window.supabase && APP_CONFIG.SUPABASE_URL) ? supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY) : null;
 const $ = id => document.getElementById(id);
 const isMobile = () => matchMedia("(max-width:820px)").matches;
@@ -249,7 +257,7 @@ let editingC = null, editRow = null, items = [], origPhotos = [], fromMine = fal
 
 // ---------- 데이터 ----------
 async function load() {
-  PLACES = await (await fetch("data/restaurants.json")).json();
+  PLACES = await (await fetch("data/restaurants.json", { cache: "no-cache" })).json();
   render();
   if (!sb) return;
   try {
