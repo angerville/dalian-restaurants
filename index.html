@@ -251,7 +251,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-163533";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-164154";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -406,7 +406,7 @@ function card(p) {
     paintLike(p.id);
   });
   el.querySelector("[data-pin]").addEventListener("click", () => focusMap(p));
-  if (p.glat) { const nm = el.querySelector(".nm"); nm.classList.add("link"); nm.title = "지도에서 보기"; nm.addEventListener("click", () => focusMap(p)); }   // 이름을 눌러도 지도에서 보기
+  if (p.glat) { const nm = el.querySelector(".nm"); nm.classList.add("link"); nm.title = "지도에서 보기"; nm.addEventListener("click", () => focusMap(p, true)); }   // 이름을 눌러도 지도에서 보기
   el.querySelectorAll("[data-delc]").forEach(b => b.addEventListener("click", async () => {
     if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "삭제 확인"; return; }
     const { error } = await sb.from("comments").delete().eq("id", b.dataset.delc);
@@ -470,7 +470,10 @@ function sortList(list) {
     : (sortKey(b) < sortKey(a) ? -1 : sortKey(b) > sortKey(a) ? 1 : 0) || idx.get(a.id) - idx.get(b.id));
 }
 let listKey = "", pendingScroll = null;
-function inView(p) { return !p.glat || !map || map.getSize().x === 0 || map.getBounds().contains([p.glat, p.glon]); }
+// 카드·목록을 눌러 지도를 옮길 때는 목록을 그대로 둔다: 옮기기 직전의 범위(frozenB)로 목록을 계속 만들고, 사용자가 직접 지도를 움직이면 풀린다
+let frozenB = null, quietUntil = 0;
+function freezeList() { if (map && map.getSize().x > 0 && !frozenB) frozenB = map.getBounds(); quietUntil = Date.now() + 1500; }
+function inView(p) { return !p.glat || !map || map.getSize().x === 0 || (frozenB || map.getBounds()).contains([p.glat, p.glon]); }
 const viewShown = () => lastShown.filter(p => p.glat && inView(p)).concat(lastShown.filter(p => !p.glat));   // 필터를 통과한 가게 중 지금 지도에 보이는 곳(위치 없는 가게는 항상)
 const sortBtns = () => `<button class="${SORT === "new" ? "on" : ""}" data-sort="new">최신순</button><button class="${SORT === "pop" ? "on" : ""}" data-sort="pop">인기순</button>`;
 let sheetKey = "";
@@ -498,7 +501,10 @@ function renderList(force) {   // 왼쪽 목록(PC): 지금 지도에 보이는 
 function scrollToCard() { const el = $("p" + pendingScroll); pendingScroll = null; if (el) { const L = $("list"); L.scrollTop += el.getBoundingClientRect().top - L.getBoundingClientRect().top - 48; el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } }
 $("list").addEventListener("click", e => { const b = e.target.closest("[data-sort]"); if (b && b.dataset.sort !== SORT) { SORT = b.dataset.sort; $("list").scrollTop = 0; render(); } });
 let viewTimer = null;
-function onMapMoved() { clearTimeout(viewTimer); viewTimer = setTimeout(() => renderList(false), 150); }
+function onMapMoved() {
+  if (Date.now() < quietUntil) return;   // 우리가 옮긴 경우: 목록은 그대로
+  clearTimeout(viewTimer); viewTimer = setTimeout(() => { frozenB = null; renderList(false); }, 150);
+}
 function render() {
   renderFilters();
   const shown = sortList(PLACES.filter(matches));
@@ -614,9 +620,10 @@ function visibleBand() {   // 위쪽 검색·칩과 아래쪽 시트에 가리�
 }
 function panToVisible(p, minZoom) {
   if (!p.glat || !map) return;
+  freezeList();   // 목록에서 고른 가게를 보러 갈 때도 목록 범위는 그대로 둔다
   setTimeout(() => {
     map.invalidateSize();
-    if (minZoom && map.getZoom() < minZoom) { map.setView([p.glat, p.glon], minZoom, { animate: false }); spiderKey = null; layoutMarkers(); const g = groupPlaces(drawnShown).find(g => g.items.some(o => o.p.id === p.id)); if (g && g.items.length > 1) { spiderKey = keyOf(g); layoutMarkers(); } }
+    if (minZoom) { if (!map.getBounds().contains([p.glat, p.glon])) map.setView([p.glat, p.glon], map.getZoom(), { animate: false }); spiderKey = null; layoutMarkers(); const g = groupPlaces(drawnShown).find(g => g.items.some(o => o.p.id === p.id)); if (g && g.items.length > 1) { spiderKey = keyOf(g); layoutMarkers(); } }
     const [vt, vb] = visibleBand(), pt = map.latLngToContainerPoint([p.glat, p.glon]), target = (vt + vb) / 2;
     if (Math.abs(pt.y - target) > 24 || pt.x < 20 || pt.x > map.getSize().x - 20) map.panBy([pt.x - map.getSize().x / 2, pt.y - target], { animate: true });
   }, 80);
@@ -678,9 +685,12 @@ $("toplogin").addEventListener("click", () => openLogin("in"));
 $("menubtn").addEventListener("click", e => { e.stopPropagation(); $("menupanel").classList.toggle("open"); });
 $("menupanel").addEventListener("click", e => { if (e.target.closest("button")) $("menupanel").classList.remove("open"); });
 document.addEventListener("click", e => { if (!e.target.closest("#menupanel") && !e.target.closest("#menubtn")) $("menupanel").classList.remove("open"); });
-function focusMap(p) {
+function focusMap(p, keepZoom) {   // keepZoom(이름 클릭): 이미 보이면 그대로, 안 보이면 확대 단계는 두고 그쪽으로만 옮긴다. 아니면(지도에서 보기 버튼) 확대한다. 어느 쪽이든 왼쪽 목록은 그대로
   if (!p.glat) return toast("위치 정보가 없습니다");
-  pendingScroll = p.id; setView("map"); map.setView([p.glat, p.glon], 17, { animate: false }); spiderKey = null; layoutMarkers(); onMapMoved();   // 목록이 새 범위로 바뀐 뒤 이 가게 카드를 맨 위로 보인다
+  freezeList(); setView("map");
+  if (!keepZoom) map.setView([p.glat, p.glon], 17, { animate: false });
+  else if (!map.getBounds().contains([p.glat, p.glon])) map.setView([p.glat, p.glon], map.getZoom(), { animate: false });
+  spiderKey = null; layoutMarkers();
   const g = groupPlaces(drawnShown).find(g => g.items.some(o => o.p.id === p.id));
   if (g && g.items.length > 1) { spiderKey = keyOf(g); layoutMarkers(); }
   markers[p.id]?.openTooltip();
