@@ -42,6 +42,8 @@ header.top h1{font-size:18px;margin:0 6px 0 0}
 .gal.one img{aspect-ratio:4/3}
 .body{padding:12px 14px}
 .nm{font-size:17px;font-weight:700}
+.nm.link{cursor:pointer}
+.nm.link:hover{color:var(--accent);text-decoration:underline}
 .zh{font-size:13px;color:var(--sub)}
 .meta{font-size:13px;color:var(--sub);margin-top:2px}
 .menu{margin-top:8px;font-size:14px}
@@ -57,6 +59,11 @@ header.top h1{font-size:18px;margin:0 6px 0 0}
 dialog{border:0;border-radius:12px;padding:0;max-width:94vw}
 dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog.pic img{display:block;max-width:94vw;max-height:88vh}
+dialog.pic{overflow:visible;background:transparent}
+.pnav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:30px;line-height:1;padding:0 0 4px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pnav:hover{background:rgba(0,0,0,.65)}
+.pprev{left:8px}.pnext{right:8px}
+.pcount{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.55);color:#fff;border-radius:999px;font-size:13px;padding:2px 10px}
 form.dlg{display:grid;gap:10px;padding:20px;width:min(520px,92vw);max-height:90vh;overflow:auto}
 form.dlg h2{font-size:17px;margin:0}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -183,7 +190,7 @@ form.guide{width:min(560px,92vw)}
 <div class="mtabs" id="mtabs"><button class="on" data-v="list">목록</button><button data-v="map">지도</button></div>
 <div class="layout" id="layout"><div id="list"></div><div id="map"></div></div>
 
-<dialog id="pic" class="pic"><img id="picimg" alt=""></dialog>
+<dialog id="pic" class="pic"><img id="picimg" alt=""><button type="button" class="pnav pprev" aria-label="이전 사진">‹</button><button type="button" class="pnav pnext" aria-label="다음 사진">›</button><span class="pcount" id="piccount"></span></dialog>
 
 <dialog id="guidedlg"><form class="dlg guide" id="guideform">
   <h2 id="guidetitle"></h2>
@@ -235,7 +242,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-131450";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-150735";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -370,9 +377,11 @@ function card(p) {
         ${status === "approved" ? `<form data-cf style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" placeholder="댓글" required></textarea><div class="actions"><button type="submit" class="on">등록</button></div></form>`
           : `<div class="by" style="color:var(--sub)">${user ? (status === "pending" ? "관리자 승인 후 댓글을 쓸 수 있습니다" : "댓글을 쓸 수 없는 계정입니다") : "로그인하면 승인된 선생님은 댓글을 쓸 수 있습니다"}</div>`}</div>` : ""}
     </div>`;
-  el.querySelectorAll("[data-big]").forEach(im => im.addEventListener("click", () => { $("picimg").src = im.src; $("pic").showModal(); }));
+  const bigs = [...el.querySelectorAll("[data-big]")];   // 확대 보기에서 같은 카드의 사진을 좌우로 넘긴다
+  bigs.forEach((im, i) => im.addEventListener("click", () => openPic(bigs.map(b => b.src), i)));
   el.querySelector("[data-cm]").addEventListener("click", () => { openComments.has(p.id) ? openComments.delete(p.id) : openComments.add(p.id); render(); });
   el.querySelector("[data-pin]").addEventListener("click", () => focusMap(p));
+  if (p.glat) { const nm = el.querySelector(".nm"); nm.classList.add("link"); nm.title = "지도에서 보기"; nm.addEventListener("click", () => focusMap(p)); }   // 이름을 눌러도 지도에서 보기
   el.querySelectorAll("[data-delc]").forEach(b => b.addEventListener("click", async () => {
     if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "삭제 확인"; return; }
     const { error } = await sb.from("comments").delete().eq("id", b.dataset.delc);
@@ -531,7 +540,7 @@ function drawSheet() {
     const p = PLACES.find(x => x.id === sheetId);
     if (!p) { sheetMode = "list"; sheetId = null; return drawSheet(); }
     $("sheettitle").textContent = p.ko; $("sheetclose").style.display = "";
-    body.innerHTML = ""; const c = card(p); c.removeAttribute("id"); c.querySelector("[data-pin]")?.remove(); body.appendChild(c);
+    body.innerHTML = ""; const c = card(p); c.removeAttribute("id"); c.querySelector("[data-pin]")?.remove(); const nm0 = c.querySelector(".nm"); if (nm0) { const nm1 = nm0.cloneNode(true); nm1.classList.remove("link"); nm1.removeAttribute("title"); nm0.replaceWith(nm1); } body.appendChild(c);
   } else {
     $("sheettitle").textContent = `가게 ${lastShown.length}곳`; $("sheetclose").style.display = "none";
     body.innerHTML = lastShown.length ? lastShown.map(listRow).join("") : '<div class="empty">조건에 맞는 가게가 없습니다</div>';
@@ -621,7 +630,24 @@ function setView(v) {
 $("mtabs").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) setView(b.dataset.v); });
 function sizeLayout() { document.documentElement.style.setProperty("--hh", ($("top").offsetHeight + $("filters").offsetHeight + (getComputedStyle($("mtabs")).display === "none" ? 0 : $("mtabs").offsetHeight)) + "px"); }
 window.addEventListener("resize", () => { sizeLayout(); map && map.invalidateSize(); });
+// ---------- 사진 확대 보기: 버튼, 키보드 좌우 화살표, 손가락 밀기로 넘긴다 ----------
+let picList = [], picI = 0;
+function showPic(d) {
+  const n = picList.length; if (!n) return;
+  picI = (picI + d + n) % n; $("picimg").src = picList[picI]; $("piccount").textContent = n > 1 ? `${picI + 1}/${n}` : "";
+  document.querySelectorAll(".pnav").forEach(b => b.style.display = n > 1 ? "" : "none");
+}
+function openPic(list, i) { picList = list; picI = i; showPic(0); if (!$("pic").open) $("pic").showModal(); }
+document.querySelector(".pprev").addEventListener("click", e => { e.stopPropagation(); showPic(-1); });
+document.querySelector(".pnext").addEventListener("click", e => { e.stopPropagation(); showPic(1); });
 $("pic").addEventListener("click", () => $("pic").close());
+$("pic").addEventListener("keydown", e => { if (e.key === "ArrowLeft") showPic(-1); else if (e.key === "ArrowRight") showPic(1); });
+let picX = null;
+$("pic").addEventListener("touchstart", e => { picX = e.touches[0].clientX; }, { passive: true });
+$("pic").addEventListener("touchend", e => {
+  if (picX == null) return; const dx = e.changedTouches[0].clientX - picX; picX = null;
+  if (Math.abs(dx) > 50) { showPic(dx < 0 ? 1 : -1); e.preventDefault(); }   // 밀었을 때는 닫히지 않게 한다
+}, { passive: false });
 
 let myPos = null, myMarker = null, myCircle = null, watchId = null;
 const distM = (a, b) => { const R = 6371000, rad = x => x * Math.PI / 180, dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]); const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
