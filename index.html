@@ -42,6 +42,10 @@ header.top h1{font-size:18px;margin:0 6px 0 0}
 .gal.one img{aspect-ratio:4/3}
 .body{padding:12px 14px}
 .nm{font-size:17px;font-weight:700}
+.sortbar{position:sticky;top:0;z-index:5;margin:-12px -16px 0;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.sortbar .cnt{flex:1;font-size:13px;color:var(--sub)}
+.sortbar button{padding:3px 12px;font-size:13px;border-radius:999px}
+.likebtn.on{background:#fff3e8;border-color:var(--accent);color:var(--accent);font-weight:600}
 .nm.link{cursor:pointer}
 .nm.link:hover{color:var(--accent);text-decoration:underline}
 .zh{font-size:13px;color:var(--sub)}
@@ -242,7 +246,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261103-150735";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261103-162825";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -260,6 +264,8 @@ const PRICE_BANDS = [["~60", 0, 60], ["60~100", 60, 100], ["100~150", 100, 150],
 
 let PLACES = [], COMMENTS = {}, ADDS = {}, EDITS = {}, admin = false, map, markers = {}, user = null, status = "";
 const F = { q: "", tag: new Set(), region: new Set(), price: new Set(), near: false, open: false };
+let LIKES = {}, MYLIKES = new Set(), SORT = "new";   // 맛있어요 개수, 내가 누른 가게, 목록 정렬(new: 최신순, pop: 인기순)
+const likeN = id => LIKES[id] || 0;
 const openComments = new Set();
 let editBase = null, baseOrig = null, kindTouched = false, pickMoved = false;
 const maxPhotos = () => editBase ? 30 : 10;   // 선생님이 올리는 글은 10장, 관리자가 고치는 기본 가게는 30장까지
@@ -271,11 +277,13 @@ async function load() {
   render();
   if (!sb) return;
   try {
-    const [s, c, pe] = await Promise.all([
+    const [s, c, pe, lk] = await Promise.all([
       sb.from("suggestions").select("*").eq("status", "approved").order("created_at"),
       sb.from("comments").select("*").eq("hidden", false).order("created_at"),
       sb.from("place_edits").select("*"),
+      sb.from("like_counts").select("*"),
     ]);
+    LIKES = {}; (lk.data || []).forEach(x => LIKES[x.place_id] = x.n);   // 표가 아직 없으면 비어 있다
     EDITS = {}; (pe.data || []).forEach(x => EDITS[x.place_id] = x);
     applyEdits(PLACES);
     if (s.data) {
@@ -311,7 +319,7 @@ function toPlace(s) {
   const m = (s.price || "").match(/\d+/), tags = [kindTag(s.kind)];
   return { id: "s" + s.id, ko: s.ko, zh: s.zh, kind: s.kind, tags, price: s.price, priceMin: m ? +m[0] : null, region: "",
     lat: s.lat, lon: s.lon, glat: s.lat ? gcj(+s.lat, +s.lon)[0] : null, glon: s.lat ? gcj(+s.lat, +s.lon)[1] : null,
-    menu: s.menu, note: s.note, photos: s.photos || [], nFood: (s.photos || []).length, url: true, by: s.author_name, uid: s.user_id, raw: s };
+    menu: s.menu, note: s.note, photos: s.photos || [], nFood: (s.photos || []).length, url: true, by: s.author_name, uid: s.user_id, raw: s, at: s.created_at || "" };
 }
 function gcj(lat, lon) {
   const a = 6378245.0, ee = 0.00669342162296594323;
@@ -370,7 +378,7 @@ function card(p) {
       ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
       ${(p.by || p.author) ? `<div class="meta">작성 ${esc(p.by || p.author)}</div>` : ""}
       ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}${user && a.user_id === user.id ? ` <button type="button" data-deladd="${a.id}">삭제</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
-      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}${(p.url && user && p.uid === user.id) ? "<button data-delp>삭제</button>" : ""}</div>
+      <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-like data-pid="${esc(p.id)}" class="likebtn ${MYLIKES.has(p.id) ? "on" : ""}">맛있어요 ${likeN(p.id)}</button><button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}${(p.url && user && p.uid === user.id) ? "<button data-delp>삭제</button>" : ""}</div>
       ${open ? `<div class="cm">${cs.map(c => c.id === editingC
       ? `<div class="c"><form data-ec="${c.id}" style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" required>${esc(c.body)}</textarea><div class="actions"><button type="button" data-cancelc>취소</button><button type="submit" class="on">저장</button></div></form></div>`
       : `<div class="c"><div>${esc(c.body)}</div><div class="by">${esc(c.author_name || "")} · ${new Date(c.created_at).toLocaleDateString("ko-KR")}${c.updated_at ? " · 수정됨" : ""}${user && c.user_id === user.id ? `${status === "approved" ? ` <button data-editc="${c.id}">수정</button>` : ""} <button data-delc="${c.id}">삭제</button>` : ""}</div></div>`).join("") || '<div class="by" style="color:var(--sub)">아직 댓글이 없습니다</div>'}
@@ -380,6 +388,18 @@ function card(p) {
   const bigs = [...el.querySelectorAll("[data-big]")];   // 확대 보기에서 같은 카드의 사진을 좌우로 넘긴다
   bigs.forEach((im, i) => im.addEventListener("click", () => openPic(bigs.map(b => b.src), i)));
   el.querySelector("[data-cm]").addEventListener("click", () => { openComments.has(p.id) ? openComments.delete(p.id) : openComments.add(p.id); render(); });
+  el.querySelector("[data-like]").addEventListener("click", async e => {   // 맛있어요: 승인된 회원만. 누르면 개수만 바꾸고 목록 순서는 다음에 그릴 때 바뀐다
+    const b = e.currentTarget;
+    if (!user) { toast("로그인한 회원만 누를 수 있습니다"); return openLogin("in"); }
+    if (status !== "approved") return toast("관리자 승인 후 누를 수 있습니다");
+    if (b.disabled) return; b.disabled = true;
+    const had = MYLIKES.has(p.id);
+    const { error } = had ? await sb.from("likes").delete().eq("place_id", p.id).eq("user_id", user.id) : await sb.from("likes").insert({ place_id: p.id });
+    b.disabled = false;
+    if (error) return toast("처리하지 못했습니다: " + error.message);
+    if (had) { MYLIKES.delete(p.id); LIKES[p.id] = Math.max(0, likeN(p.id) - 1); } else { MYLIKES.add(p.id); LIKES[p.id] = likeN(p.id) + 1; }
+    paintLike(p.id);
+  });
   el.querySelector("[data-pin]").addEventListener("click", () => focusMap(p));
   if (p.glat) { const nm = el.querySelector(".nm"); nm.classList.add("link"); nm.title = "지도에서 보기"; nm.addEventListener("click", () => focusMap(p)); }   // 이름을 눌러도 지도에서 보기
   el.querySelectorAll("[data-delc]").forEach(b => b.addEventListener("click", async () => {
@@ -433,18 +453,44 @@ function setupGallery(el, p) {
   upd();   // 처음에는 이전 버튼을 숨긴다
   requestAnimationFrame(() => { if (galPos[p.id]) g.scrollLeft = galPos[p.id] * g.clientWidth; upd(); });
 }
+function paintLike(id) {   // 같은 가게의 맛있어요 버튼(목록·하단 시트)을 제자리에서 바꾼다
+  document.querySelectorAll("[data-like]").forEach(b => { if (b.dataset.pid === String(id)) { b.textContent = "맛있어요 " + likeN(id); b.classList.toggle("on", MYLIKES.has(id)); } });
+}
+const sortKey = p => p.at || "";   // 최신순: 선생님이 올린 글은 올린 시각, 기본 가게는 날짜가 없어 맨 뒤(원래 순서)
+function sortList(list) {
+  if (F.near && myPos) return list.slice().sort((a, b) => (a.glat ? distM(myPos, [a.glat, a.glon]) : 1e9) - (b.glat ? distM(myPos, [b.glat, b.glon]) : 1e9));
+  const idx = new Map(PLACES.map((p, i) => [p.id, i]));
+  return list.slice().sort((a, b) => SORT === "pop"
+    ? (likeN(b.id) - likeN(a.id)) || (sortKey(b) < sortKey(a) ? -1 : sortKey(b) > sortKey(a) ? 1 : 0) || idx.get(a.id) - idx.get(b.id)
+    : (sortKey(b) < sortKey(a) ? -1 : sortKey(b) > sortKey(a) ? 1 : 0) || idx.get(a.id) - idx.get(b.id));
+}
+let listKey = "", pendingScroll = null;
+function inView(p) { return !p.glat || !map || map.getSize().x === 0 || map.getBounds().contains([p.glat, p.glon]); }
+function renderList(force) {   // 왼쪽 목록: 필터를 통과한 가게 중 지금 지도에 보이는 곳만 고른 순서대로 그린다
+  if (isMobile()) return;
+  const inside = lastShown.filter(p => p.glat && inView(p)), noPos = lastShown.filter(p => !p.glat), shown = inside.concat(noPos);
+  const key = SORT + "|" + shown.map(p => p.id).join(",");
+  if (!force && key === listKey) { if (pendingScroll) scrollToCard(); return; }
+  listKey = key;
+  const list = $("list"), keep = list.scrollTop;
+  list.innerHTML = "";
+  const bar = document.createElement("div"); bar.className = "sortbar";
+  bar.innerHTML = `<span class="cnt">지도에 보이는 가게 ${shown.length}곳${shown.length < lastShown.length ? ` / 전체 ${lastShown.length}곳` : ""}</span><button class="${SORT === "new" ? "on" : ""}" data-sort="new">최신순</button><button class="${SORT === "pop" ? "on" : ""}" data-sort="pop">인기순</button>`;
+  list.appendChild(bar);
+  if (!shown.length) { const d = document.createElement("div"); d.className = "empty"; d.textContent = lastShown.length ? "지금 지도에는 가게가 없습니다. 지도를 움직이거나 줄여 보세요" : "조건에 맞는 가게가 없습니다"; list.appendChild(d); }
+  shown.forEach(p => list.appendChild(card(p)));
+  list.scrollTop = keep;
+  if (pendingScroll) scrollToCard();
+}
+function scrollToCard() { const el = $("p" + pendingScroll); pendingScroll = null; if (el) { const L = $("list"); L.scrollTop += el.getBoundingClientRect().top - L.getBoundingClientRect().top - 48; el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1600); } }
+$("list").addEventListener("click", e => { const b = e.target.closest("[data-sort]"); if (b && b.dataset.sort !== SORT) { SORT = b.dataset.sort; $("list").scrollTop = 0; render(); } });
+let viewTimer = null;
+function onMapMoved() { clearTimeout(viewTimer); viewTimer = setTimeout(() => renderList(false), 150); }
 function render() {
   renderFilters();
-  let shown = PLACES.filter(matches);
-  if (F.near && myPos) shown = shown.slice().sort((a, b) => (a.glat ? distM(myPos, [a.glat, a.glon]) : 1e9) - (b.glat ? distM(myPos, [b.glat, b.glon]) : 1e9));
+  const shown = sortList(PLACES.filter(matches));
   lastShown = shown;
-  if (!isMobile()) {
-    const list = $("list"), keep = list.scrollTop;
-    list.innerHTML = "";
-    if (!shown.length) list.innerHTML = '<div class="empty">조건에 맞는 가게가 없습니다</div>';
-    shown.forEach(p => list.appendChild(card(p)));
-    list.scrollTop = keep;
-  }
+  renderList(true);
   drawMarkers(shown);
   drawSheet();
   sizeLayout();
@@ -530,7 +576,7 @@ function setSheet(state) { sheetState = state; setTopPx(snapTops()[state]); }
 const listRow = p => {
   const d = (myPos && p.glat) ? fmtDist(distM(myPos, [p.glat, p.glon])) : "";
   return `<div class="lrow" data-lid="${esc(p.id)}">${p.photos[0] ? `<img src="${esc(photoUrl(p.photos[0], p))}" loading="lazy" decoding="async" alt="">` : '<div class="noimg"></div>'}
-    <div class="lt"><div class="nm2">${esc(p.ko)}</div><div class="meta">${[p.kind, p.price ? "¥" + p.price : "", p.region, d].filter(Boolean).map(esc).join(" · ")}</div>${p.menu ? `<div class="sub2">${esc(p.menu)}</div>` : ""}</div></div>`;
+    <div class="lt"><div class="nm2">${esc(p.ko)}</div><div class="meta">${[p.kind, p.price ? "¥" + p.price : "", p.region, d, likeN(p.id) ? "맛있어요 " + likeN(p.id) : ""].filter(Boolean).map(esc).join(" · ")}</div>${p.menu ? `<div class="sub2">${esc(p.menu)}</div>` : ""}</div></div>`;
 };
 function drawSheet() {
   if (!isMobile()) return;
@@ -616,7 +662,7 @@ $("menupanel").addEventListener("click", e => { if (e.target.closest("button")) 
 document.addEventListener("click", e => { if (!e.target.closest("#menupanel") && !e.target.closest("#menubtn")) $("menupanel").classList.remove("open"); });
 function focusMap(p) {
   if (!p.glat) return toast("위치 정보가 없습니다");
-  setView("map"); map.setView([p.glat, p.glon], 17, { animate: false }); spiderKey = null; layoutMarkers();
+  pendingScroll = p.id; setView("map"); map.setView([p.glat, p.glon], 17, { animate: false }); spiderKey = null; layoutMarkers(); onMapMoved();   // 목록이 새 범위로 바뀐 뒤 이 가게 카드를 맨 위로 보인다
   const g = groupPlaces(drawnShown).find(g => g.items.some(o => o.p.id === p.id));
   if (g && g.items.length > 1) { spiderKey = keyOf(g); layoutMarkers(); }
   markers[p.id]?.openTooltip();
@@ -673,6 +719,7 @@ function initMap() {
   map = L.map("map", { zoomControl: true }).setView([38.93, 121.62], 11);
   map.on("click", () => { if (!isMobile()) return; if (sheetMode === "place") closeSheet(); else if (sheetState !== "peek") setSheet("peek"); });
   map.on("zoomend", () => { updateLabels(); spiderKey = null; layoutMarkers(); }); updateLabels();
+  map.on("moveend", onMapMoved);   // 지도를 움직이거나 확대·축소하면 왼쪽 목록을 보이는 범위에 맞춘다
   map.on("click", () => { if (spiderKey) { spiderKey = null; layoutMarkers(); } });
   const Loc = L.Control.extend({ options: { position: "bottomright" }, onAdd() { const b = L.DomUtil.create("button", "locbtn"); b.textContent = "내 위치"; b.type = "button"; L.DomEvent.disableClickPropagation(b); b.addEventListener("click", toggleMe); return b; } });
   new Loc().addTo(map);
@@ -685,6 +732,8 @@ async function refreshUser() {
   const { data } = await sb.auth.getSession(); user = data.session?.user || null; status = ""; admin = false;
   if (user) { const p = await sb.from("profiles").select("status,display_name").eq("user_id", user.id).maybeSingle(); status = p.data?.status || ""; admin = (await sb.rpc("is_admin")).data === true; $("who").textContent = (p.data?.display_name || user.email) + (status === "pending" ? " · 승인 대기" : ""); }
   else $("who").textContent = "";
+  MYLIKES = new Set();   // 내가 누른 맛있어요
+  if (user) { const lk = await sb.from("likes").select("place_id").eq("user_id", user.id); (lk.data || []).forEach(x => MYLIKES.add(x.place_id)); }
   $("login").textContent = user ? "로그아웃" : "로그인";
   $("mine").style.display = (user && status === "approved") ? "" : "none";
   $("adminbtn").style.display = admin ? "" : "none";
