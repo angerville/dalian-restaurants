@@ -109,6 +109,11 @@ form.dlg h2{font-size:17px;margin:0}
 .pvw{position:relative;width:96px}
 .prev .pvw img{width:96px;height:96px;object-fit:cover;border-radius:8px;display:block}
 .pvw .ord{position:absolute;left:4px;top:4px;background:rgba(0,0,0,.5);color:#fff;border-radius:999px;font-size:11px;padding:0 7px}
+.prev .pvw img{touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.pvw.pvdrag{z-index:5;opacity:.85;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.pvw.pvdrag img{cursor:grabbing}
+.pvw.pvdrop img{outline:3px solid var(--accent);outline-offset:-3px}
+.hint{font-size:12px;color:var(--sub)}
 .pvw .pb{display:flex;gap:2px;margin-top:3px}
 .pvw .pb button{flex:1;padding:2px 0;font-size:13px}
 #pick{height:210px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-top:2px}
@@ -233,6 +238,7 @@ form.guide{width:min(560px,92vw)}
   <label>메모<textarea name="note" rows="3" maxlength="1500"></textarea></label>
   <label>사진(최대 10장)<input type="file" name="photos" accept="image/*" multiple></label>
   <div class="prev" id="prev"></div>
+  <div class="hint" id="prevhint" style="display:none">사진을 끌어다 놓아 순서를 바꿀 수 있습니다</div>
   <div class="msg" id="sugmsg"></div>
   <div class="actions"><button type="button" id="sugcancel">취소</button><button type="submit" class="on" id="sugsend">올리기</button></div>
 </form></dialog>
@@ -251,7 +257,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261107-141817";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261107-142815";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -895,17 +901,36 @@ $("geo").addEventListener("click", () => {
   }, () => say("현재 위치를 가져오지 못했습니다. 지도를 눌러 표시해 주세요"), { enableHighAccuracy: true, timeout: 10000 });
 });
 function renderPrev() {
-  $("prev").innerHTML = items.map((it, i) => `<div class="pvw"><img src="${esc(it.url || it.src)}" alt=""><span class="ord">${i + 1}</span>
-    <div class="pb"><button type="button" data-pl="${i}"${i === 0 ? " disabled" : ""} aria-label="앞으로">‹</button><button type="button" data-pr="${i}"${i === items.length - 1 ? " disabled" : ""} aria-label="뒤로">›</button><button type="button" data-pd="${i}">삭제</button></div></div>`).join("");
+  $("prev").innerHTML = items.map((it, i) => `<div class="pvw"><img src="${esc(it.url || it.src)}" alt="" draggable="false"><span class="ord">${i + 1}</span>
+    <div class="pb"><button type="button" data-pd="${i}">삭제</button></div></div>`).join("");
+  $("prevhint").style.display = items.length > 1 ? "" : "none";
 }
 $("prev").addEventListener("click", e => {
-  const b = e.target.closest("button[data-pl],button[data-pr],button[data-pd]"); if (!b) return;
-  const move = (i, j) => { if (j >= 0 && j < items.length) [items[i], items[j]] = [items[j], items[i]]; };
-  if (b.dataset.pl != null) move(+b.dataset.pl, +b.dataset.pl - 1);
-  else if (b.dataset.pr != null) move(+b.dataset.pr, +b.dataset.pr + 1);
-  else { const [it] = items.splice(+b.dataset.pd, 1); if (it.src) URL.revokeObjectURL(it.src); }
+  const b = e.target.closest("button[data-pd]"); if (!b) return;
+  const [it] = items.splice(+b.dataset.pd, 1); if (it.src) URL.revokeObjectURL(it.src);
   renderPrev();
 });
+// 사진을 끌어다 놓아 순서를 바꾼다(마우스·터치 모두): 놓은 자리의 사진 위치로 들어간다
+let pvDrag = null;
+$("prev").addEventListener("pointerdown", e => {
+  const t = e.target.closest(".pvw"); if (!t || e.target.closest("button") || (e.pointerType === "mouse" && e.button !== 0)) return;
+  pvDrag = { from: [...$("prev").children].indexOf(t), tile: t, x0: e.clientX, y0: e.clientY, on: false, to: -1, id: e.pointerId };
+});
+window.addEventListener("pointermove", e => {
+  const d = pvDrag; if (!d || e.pointerId !== d.id) return;
+  if (!d.on) { if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6) return; d.on = true; d.tile.classList.add("pvdrag"); }
+  d.tile.style.transform = `translate(${e.clientX - d.x0}px,${e.clientY - d.y0}px)`;
+  const tiles = [...$("prev").children]; d.to = -1;   // 포인터가 다른 사진 칸 안에 들어왔을 때만 그 자리로 놓는다
+  tiles.forEach((t, i) => { if (t === d.tile) return; const r = t.getBoundingClientRect(); if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) d.to = i; });
+  tiles.forEach((t, i) => t.classList.toggle("pvdrop", i === d.to));
+  if (e.cancelable) e.preventDefault();
+});
+function endPvDrag(e) {
+  const d = pvDrag; if (!d || e.pointerId !== d.id) return; pvDrag = null;
+  if (d.on && e.type === "pointerup" && d.to >= 0 && d.to !== d.from) { const [it] = items.splice(d.from, 1); items.splice(d.to, 0, it); }
+  renderPrev();   // 끌던 칸을 제자리로 되돌리고 번호를 다시 매긴다
+}
+window.addEventListener("pointerup", endPvDrag); window.addEventListener("pointercancel", endPvDrag);
 function openEdit(row) {
   if (!user || !row) return;
   const f = $("sugform"); editBase = null; kindTouched = false; pickMoved = false; editRow = row; items = (row.photos || []).map(u => ({ url: u })); origPhotos = (row.photos || []).slice(); target = null; pickPt = null;
