@@ -257,7 +257,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261107-143026";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261107-143241";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -468,13 +468,13 @@ function setupGallery(el, p) {
 function paintLike(id) {   // 같은 가게의 맛있어요 버튼(목록·하단 시트)을 제자리에서 바꾼다
   document.querySelectorAll("[data-like]").forEach(b => { if (b.dataset.pid === String(id)) { b.textContent = "맛있어요 " + likeN(id); b.classList.toggle("on", MYLIKES.has(id)); } });
 }
-const sortKey = p => p.at || "";   // 최신순: 선생님이 올린 글은 올린 시각, 기본 가게는 날짜가 없어 맨 뒤(원래 순서)
+const sortKey = p => p.at || "";   // 최신순: 올린 날짜(선생님 글은 올린 시각, 기본 가게는 data의 at)
 function sortList(list) {
   if (F.near && myPos) return list.slice().sort((a, b) => (a.glat ? distM(myPos, [a.glat, a.glon]) : 1e9) - (b.glat ? distM(myPos, [b.glat, b.glon]) : 1e9));
   const idx = new Map(PLACES.map((p, i) => [p.id, i]));
   return list.slice().sort((a, b) => SORT === "pop"
     ? (likeN(b.id) - likeN(a.id)) || (sortKey(b) < sortKey(a) ? -1 : sortKey(b) > sortKey(a) ? 1 : 0) || idx.get(a.id) - idx.get(b.id)
-    : (sortKey(b) < sortKey(a) ? -1 : sortKey(b) > sortKey(a) ? 1 : 0) || idx.get(a.id) - idx.get(b.id));
+    : (sortKey(b) < sortKey(a) ? -1 : sortKey(b) > sortKey(a) ? 1 : 0) || idx.get(b.id) - idx.get(a.id));   // 같은 날이면 나중에 들어온 가게가 먼저
 }
 let listKey = "", pendingScroll = null;
 // 카드·목록을 눌러 지도를 옮길 때는 목록을 그대로 둔다: 옮기기 직전의 범위(frozenB)로 목록을 계속 만들고, 사용자가 직접 지도를 움직이면 풀린다
