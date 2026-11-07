@@ -257,7 +257,7 @@ form.guide{width:min(560px,92vw)}
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.23.0/dist/index.js"></script>
 <script src="config.js"></script>
 <script>
-const BUILD = "20261107-142815";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
+const BUILD = "20261107-143026";   // tools/stamp.py가 배포할 때마다 새 값으로 바꾼다
 // 주소창으로 열면 브라우저가 index.html을 몇 분간 보관해서 새 버전이 바로 안 보일 수 있다. 새 버전이 있으면 한 번 다시 불러온다.
 (async () => {
   try {
@@ -277,6 +277,7 @@ let PLACES = [], COMMENTS = {}, ADDS = {}, EDITS = {}, admin = false, map, marke
 const F = { q: "", tag: new Set(), region: new Set(), price: new Set(), near: false, open: false };
 let LIKES = {}, MYLIKES = new Set(), SORT = "new";   // 맛있어요 개수, 내가 누른 가게, 목록 정렬(new: 최신순, pop: 인기순)
 const likeN = id => LIKES[id] || 0;
+const fmtDate = v => { const d = new Date(v); return isNaN(d) ? "" : `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; };   // 2026.11.07
 const openComments = new Set();
 let editBase = null, baseOrig = null, kindTouched = false, pickMoved = false;
 const maxPhotos = () => editBase ? 30 : 10;   // 선생님이 올리는 글은 10장, 관리자가 고치는 기본 가게는 30장까지
@@ -387,12 +388,12 @@ function card(p) {
       <div class="meta">${[p.kind, p.price ? "인당 ¥" + p.price : "", p.region, (myPos && p.glat) ? "내 위치에서 " + fmtDist(distM(myPos, [p.glat, p.glon])) : ""].filter(Boolean).map(esc).join(" · ")}</div>
       ${p.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(p.menu)}</div>` : ""}
       ${p.note ? `<div class="note">${esc(p.note)}</div>` : ""}
-      ${(p.by || p.author) ? `<div class="meta">작성 ${esc(p.by || p.author)}</div>` : ""}
-      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${new Date(a.created_at).toLocaleDateString("ko-KR")}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}${user && a.user_id === user.id ? ` <button type="button" data-deladd="${a.id}">삭제</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
+      ${(p.by || p.author) ? `<div class="meta">작성 ${esc(p.by || p.author)}${p.at ? " · " + fmtDate(p.at) : ""}${p.raw && p.raw.updated_at ? " · 수정 " + fmtDate(p.raw.updated_at) : ""}</div>` : ""}
+      ${(ADDS[p.id] || []).length ? `<div class="adds">${ADDS[p.id].map(a => `<div class="add"><div class="by">추가 정보 · ${esc(a.author_name || "")} · ${fmtDate(a.created_at)}${a.updated_at ? " · 수정됨" : ""}${user && (a.user_id === user.id || admin) && status === "approved" ? ` <button type="button" data-editadd="${a.id}">수정</button>` : ""}${user && a.user_id === user.id ? ` <button type="button" data-deladd="${a.id}">삭제</button>` : ""}</div>${a.menu ? `<div class="menu"><b>추천 메뉴</b> ${esc(a.menu)}</div>` : ""}${a.price ? `<div class="meta">인당 ¥${esc(a.price)}</div>` : ""}${a.note ? `<div class="note">${esc(a.note)}</div>` : ""}${(a.photos || []).length ? `<div class="aph">${a.photos.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-big>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
       <div class="acts">${amap ? `<a href="${amap}" target="_blank" rel="noopener"><button>Amap에서 열기</button></a>` : ""}<button data-like data-pid="${esc(p.id)}" class="likebtn ${MYLIKES.has(p.id) ? "on" : ""}">맛있어요 ${likeN(p.id)}</button><button data-cm>댓글 ${cs.length}</button><button data-pin>지도에서 보기</button>${(p.url && user && (p.uid === user.id || admin) && status === "approved") ? "<button data-edits>수정</button>" : (!p.url && admin ? "<button data-editbase>수정</button>" : "")}${(p.url && user && p.uid === user.id) ? "<button data-delp>삭제</button>" : ""}</div>
       ${open ? `<div class="cm">${cs.map(c => c.id === editingC
       ? `<div class="c"><form data-ec="${c.id}" style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" required>${esc(c.body)}</textarea><div class="actions"><button type="button" data-cancelc>취소</button><button type="submit" class="on">저장</button></div></form></div>`
-      : `<div class="c"><div>${esc(c.body)}</div><div class="by">${esc(c.author_name || "")} · ${new Date(c.created_at).toLocaleDateString("ko-KR")}${c.updated_at ? " · 수정됨" : ""}${user && c.user_id === user.id ? `${status === "approved" ? ` <button data-editc="${c.id}">수정</button>` : ""} <button data-delc="${c.id}">삭제</button>` : ""}</div></div>`).join("") || '<div class="by" style="color:var(--sub)">아직 댓글이 없습니다</div>'}
+      : `<div class="c"><div>${esc(c.body)}</div><div class="by">${esc(c.author_name || "")} · ${fmtDate(c.created_at)}${c.updated_at ? " · 수정됨" : ""}${user && c.user_id === user.id ? `${status === "approved" ? ` <button data-editc="${c.id}">수정</button>` : ""} <button data-delc="${c.id}">삭제</button>` : ""}</div></div>`).join("") || '<div class="by" style="color:var(--sub)">아직 댓글이 없습니다</div>'}
         ${status === "approved" ? `<form data-cf style="display:grid;gap:6px"><textarea rows="2" maxlength="1000" placeholder="댓글" required></textarea><div class="actions"><button type="submit" class="on">등록</button></div></form>`
           : `<div class="by" style="color:var(--sub)">${user ? (status === "pending" ? "관리자 승인 후 댓글을 쓸 수 있습니다" : "댓글을 쓸 수 없는 계정입니다") : "로그인하면 승인된 선생님은 댓글을 쓸 수 있습니다"}</div>`}</div>` : ""}
     </div>`;
